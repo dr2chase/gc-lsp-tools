@@ -3,11 +3,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"github.com/dr2chase/gc-lsp-tools/gclsp"
 	"io"
 	"os"
 	"os/exec"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"unicode"
@@ -133,21 +135,62 @@ func lineToProfileItem(s string) *profileItem {
 	return &pi
 }
 
+// gclsp_prof lspdir profile1 [ profile2 ... ]
 //
 func main() {
 	verbose := false
-	if len(os.Args) < 3 {
-		fmt.Printf("Usage: %s gc-lsp-dir profile1 [profile2 ...]\n", os.Args[0])
-		return
+	before := 2
+	after := 1
+	cpuprofile := ""
+	threshold := 1.0
+
+	flag.BoolVar(&verbose, "v", verbose, "Spews information about profiles read and lsp files")
+	flag.IntVar(&before, "b", before, "Include log entries this many lines before a profile hot spot")
+	flag.IntVar(&after, "a", after, "Include log entries this many lines after a profile hot spot")
+	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
+	flag.Float64Var(&threshold, "t", threshold, "Threshold percentage below which profile entries will be ignored")
+
+	usage := func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr,
+			`
+%s LspDir Profile1 [ Profile2 ... ] reads the supplied cpu profiles to
+determine the hotspots in an application, then reads the compiler logging
+information in LspDir to match missed optimizations against hotspots.
+`, os.Args[0])
 	}
-	lspDir := os.Args[1]
+
+	flag.Usage = usage
+
+	flag.Parse()
+
+	if cpuprofile != "" {
+		file, _ := os.Create(cpuprofile)
+		pprof.StartCPUProfile(file)
+		defer func() {
+			pprof.StopCPUProfile()
+			file.Close()
+		} ()
+	}
+
+	args := flag.Args()
+	if len(args) < 2 {
+		usage()
+		os.Exit(1)
+	}
+	lspDir := args[0]
 	cmdArgs := []string{"tool", "pprof", "-text", "-lines", "-flat"}
-	cmdArgs = append(cmdArgs, os.Args[2:]...)
+	cmdArgs = append(cmdArgs, args[1:]...)
 	cmd := exec.Command("go", cmdArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("Failed to run go tool pprof -text -lines -flat %v\n", cmdArgs)
-		fmt.Println(out)
+		m := ""
+		for _, s := range cmdArgs {
+			m = m + " " + s
+		}
+		fmt.Printf("Failed to run go%s\n", m)
+		fmt.Println(string(out))
 		fmt.Println(err)
 		return
 	}
@@ -170,7 +213,7 @@ func main() {
 
 	if verbose {
 		for _, p := range pi {
-			if p.flatPercent >= 1 {
+			if p.flatPercent >= threshold {
 				fmt.Printf("%f%%, %s:%d\n", p.flatPercent, p.sourceFile, p.line)
 			}
 		}
@@ -184,7 +227,7 @@ func main() {
 
 	near := func(d *gclsp.Diagnostic, line int) bool {
 		diag := int(d.Range.Start.Line)
-		return line - 2 <= diag && diag <= line+1
+		return line - before <= diag && diag <= line+after
 	}
 
 	for _, p := range pi {
