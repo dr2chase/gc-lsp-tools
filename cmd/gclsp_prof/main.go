@@ -236,7 +236,7 @@ information in LspDir to match missed optimizations against hotspots.
 	}
 
 	for _, p := range pi {
-		if p.flatPercent >= 1 {
+		if p.flatPercent >= threshold {
 			cd := byFile[p.sourceFile]
 			if cd != nil && len(cd.Diagnostics) > 0 {
 				for _, d := range cd.Diagnostics {
