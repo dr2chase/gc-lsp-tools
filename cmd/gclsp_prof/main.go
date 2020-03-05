@@ -196,13 +196,18 @@ information in LspDir to match missed optimizations against hotspots.
 	}
 	r := bufio.NewReader(bytes.NewBuffer(out))
 	var pi []*profileItem
+	skipping := true
 	for i := 1; err != io.EOF; i++ {
 		var s string
 		s, err = r.ReadString('\n')
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
-		if i <= 6 {
+		if skipping {
+			s = strings.TrimSpace(s)
+			if strings.HasPrefix(s, "flat") {
+				skipping = false
+			}
 			continue
 		}
 		if s == "" {
