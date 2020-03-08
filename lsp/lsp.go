@@ -1,4 +1,8 @@
-package gclsp
+// Copyright 2020 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package lsp
 
 import (
 	"encoding/json"
@@ -193,7 +197,7 @@ func ReadPackage(dir string) (cds []*CompilerDiagnostics, err error) {
 // ReadAll opens a directory of directories, where each directory corresponds to
 // a package, and populates a map from (outermost) source file to compiler diagnostics
 // for that file.
-// TODO also index inlined occurrences.
+// Indexing is by outermost file for a diagnostic's position.
 func ReadAll(dir string, byFile *map[string]*CompilerDiagnostics, verbose bool) error {
 	first := true
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
