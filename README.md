@@ -32,38 +32,48 @@ go build -gcflags=all=-json=0,$PWD/somedir myapp.go
 
 Then run your application, which will create a profile.
 
-Finally, run 
+Finally, run, for example
 ```
-gclsp_prof $PWD/somedir myapp.prof
+.../gclsp_prof/testdata$ gclsp_prof -s -t 5.0 gclsp foo.prof
 ```
 
 This will produce output that looks something like:
 ```
-~/work/bent$ gclsp_prof ./gclsp /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/gonum_community_Go_0.prof
-  4.5%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:390 :: cannotInlineFunction, marked go:cgo_unsafe_args (at nearby line 389)
-  4.5%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:390 :: nilcheck (at line 390)
-  3.6%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:201 :: cannotInlineFunction, marked go:cgo_unsafe_args (at nearby line 200)
-  3.6%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:201 :: nilcheck (at line 201)
-  2.7%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:867 :: isInBounds (at line 867)
-  2.7%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:867 :: isInBounds (at nearby line 868)
-  2.7%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:404 :: cannotInlineFunction, marked go:cgo_unsafe_args (at nearby line 403)
-  2.7%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:404 :: nilcheck (at line 404)
-  2.7%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:168 :: cannotInlineFunction, marked go:cgo_unsafe_args (at nearby line 167)
-  2.7%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:168 :: nilcheck (at line 168)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:875 :: isInBounds (at line 875)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:875 :: isInBounds (at line 875)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:599 :: isInBounds (at line 599)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:599 :: isInBounds (at line 599)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:601 :: isInBounds (at nearby line 599)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:601 :: isInBounds (at nearby line 599)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_directed_multiplex.go:601 :: isInBounds (at line 601)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_common.go:367 :: cannotInlineFunction, function too complex: cost 83 exceeds budget 80 (at nearby line 366)
-  1.8%, /Users/drchase/work/bent/gopath/src/gonum.org/v1/gonum/graph/community/louvain_common.go:367 :: escape (at nearby line 366)
-  1.8%, /Users/drchase/work/bent/goroots/Go/src/runtime/malloc.go:891 :: cannotInlineFunction, unhandled op CLOSURE (at nearby line 890)
-  1.8%, /Users/drchase/work/bent/goroots/Go/src/runtime/mprof.go:229 :: isInBounds (at line 229)
-  1.8%, /Users/drchase/work/bent/goroots/Go/src/runtime/mprof.go:229 :: nilcheck (at line 229)
-  1.8%, /Users/drchase/work/bent/goroots/Go/src/runtime/mprof.go:229 :: isSliceInBounds (at nearby line 230)
-  1.8%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:239 :: cannotInlineFunction, marked go:cgo_unsafe_args (at nearby line 238)
-  1.8%, /Users/drchase/work/bent/goroots/Go/src/runtime/sys_darwin.go:239 :: nilcheck (at line 239)
+gclsp_prof -s -t 5.0 gclsp foo.prof
+  5.6%, $PWD/foo.go:93 :: isInBounds (at nearby line 94)
+	 :: $PWD/foo.go:20
+  8.6%, $PWD/foo.go:94 :: isInBounds (at line 94)
+	$PWD/foo.go:20 :: $PWD/foo.go:20
+  9.2%, $PWD/foo.go:94 :: isInBounds (at line 94)
+	$PWD/foo.go:20 :: $PWD/foo.go:20
+ 13.8%, $PWD/foo.go:38 :: isInBounds (at nearby line 37)
+	$PWD/foo.go:20 :: $PWD/foo.go:16
+ 13.8%, $PWD/foo.go:38 :: isInBounds (at line 38)
+	$PWD/foo.go:20 :: $PWD/foo.go:16
+ 13.8%, $PWD/foo.go:38 :: isInBounds (at nearby line 39)
+	$PWD/foo.go:20 :: $PWD/foo.go:20
+ 19.4%, $PWD/foo.go:38 :: isInBounds (at nearby line 37)
+	$PWD/foo.go:20 :: $PWD/foo.go:16
+ 19.4%, $PWD/foo.go:38 :: isInBounds (at line 38)
+	$PWD/foo.go:20 :: $PWD/foo.go:16
+ 19.4%, $PWD/foo.go:38 :: isInBounds (at nearby line 39)
+	$PWD/foo.go:20 :: $PWD/foo.go:20
 ```
+Inline locations in the list above appear on lines following a sample line,
+arranged "sample_line :: diagnostic_line".
+They don't always match, especially for "nearby" lines.
 
+To generate the sample data above, in
+`/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof`,
+run
+`go test . -here`
+which should produce `gclsp` and `foo.prof` for `testdata/foo.go`.
+
+Possibly useful options include:
+
+- -a=n, mention compiler diagnostics from n lines after a hot spot (default 0).
+- -b=n, mention compiler diagnostics from n lines before a hot spot (default 0).
+- -t=n.f, (a float) samples less hot than the threshold percentage are ignored (default 1.0).
+- -s, shorten file names with prefixes that match environment variables PWD, GOROOT, GOPATH, HOME.
+- -v, verbose.  You don't want verbose.
+- -cpuprofile=file, because every application should have this option.
