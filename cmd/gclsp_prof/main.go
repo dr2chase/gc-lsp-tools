@@ -22,6 +22,8 @@ var gopath string = os.Getenv("GOPATH")
 var home string = os.Getenv("HOME")
 var strip bool
 
+// shorten replaces a string's prefix with $EV if $EV == that prefix.
+// EV is one of PWD, GOROOT, GOPATH, and HOME.
 func shorten(s string) string {
 	if !strip {
 		return s
@@ -42,8 +44,8 @@ func shorten(s string) string {
 	return s
 }
 
-// gclsp_prof lspdir profile1 [ profile2 ... ]
-//
+// gclsp_prof [-v] [-a=n] [-b=n] [-t=f.f] [-s] [-cpuprofile=file]  lspdir profile1 [ profile2 ... ]
+// Produces a summary of optimizations (if any) that were not or could not be applied at hotspots in the profile.
 func main() {
 	verbose := false
 	before := int64(2)

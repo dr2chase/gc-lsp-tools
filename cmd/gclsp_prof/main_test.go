@@ -32,6 +32,75 @@ var (
 	here = flag.Bool("here", false, "run the test in this directory")
 )
 
+func TestIt(t *testing.T) {
+	// Set up test directory.
+	testdir := path.Join(cwd, "testdata")
+	if !*here {
+		var err error
+		testdir, err = ioutil.TempDir("", "GcLspProfTest")
+		if err != nil {
+			panic(err)
+		}
+		if !*keep {
+			defer os.RemoveAll(testdir) // clean up
+		}
+	}
+
+	// Important files
+	binary := path.Join(testdir, "foo.exe")
+	gclsp_prof := path.Join(testdir, "gclsp_prof.exe")
+	lspdir := path.Join(testdir, "gclsp")
+
+	cmd := exec.Command("go", "build", "-o", binary, "-gcflags=-json=0,"+lspdir, "testdata/foo.go")
+	_ = runCmd(cmd, t)
+
+	cmd = exec.Command("go", "build", "-o", gclsp_prof, ".")
+	_ = runCmd(cmd, t)
+
+	cmd = exec.Command(binary)
+	cmd.Dir = testdir
+	_ = runCmd(cmd, t)
+
+	cmd = exec.Command(gclsp_prof, "-a=0", "-b=0", "-t=4.0", "-s", "./gclsp", "foo.prof")
+	cmd.Dir = testdir
+	cmd.Env = replaceEnv(os.Environ(), "PWD", testdir)
+	out := string(runCmd(cmd, t))
+	t.Logf("\n%s", out)
+
+	split := strings.Split(out, "\n")
+
+	if len(split) > 9 { // Last line is blank.
+		split = split[len(split)-9:]
+	}
+	// This can fail if the profiles are far from expected values, which might happen sometimes or on some architectures.
+	matchREs := []string{
+		".*/foo[.]go:94 :: isInBounds [(]at line 94[)]",
+		".*/foo[.]go:20 :: [$].*/foo[.]go:20",
+		".*/foo[.]go:94 :: isInBounds [(]at line 94[)]",
+		".*/foo[.]go:20 :: [$].*/foo[.]go:20",
+		".*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
+		".*/foo[.]go:20 :: [$].*/foo[.]go:16",
+		".*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
+		".*/foo[.]go:20 :: [$].*/foo[.]go:16",
+	}
+	for i, s := range split {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		re := matchREs[i]
+		match, err := regexp.MatchString(re, s)
+		if err != nil {
+			panic(err)
+		}
+		if !match {
+			t.Errorf("%s failed to match %s", s, re)
+		} else {
+			t.Logf("Line %d matched regexp %s", i, re)
+		}
+	}
+}
+
 // replaceEnv returns a new environment derived from env
 // by removing any existing definition of ev and adding ev=evv.
 func replaceEnv(env []string, ev string, evv string) []string {
@@ -46,6 +115,10 @@ func replaceEnv(env []string, ev string, evv string) []string {
 	return newenv
 }
 
+// trim shortens s to be relative to cwd, if possible.
+// needsDotSlash indicates that s is something like a command
+// and must contain at least one path separator (because "." is
+// by sensible default not on paths).
 func trim(s, cwd string, needsDotSlash bool) string {
 	if s == cwd {
 		return "."
@@ -85,70 +158,4 @@ func runCmd(cmd *exec.Cmd, t *testing.T) []byte {
 		t.FailNow()
 	}
 	return out
-}
-
-func TestIt(t *testing.T) {
-	testdir := path.Join(cwd, "testdata")
-	if !*here {
-		var err error
-		testdir, err = ioutil.TempDir("", "GcLspProfTest")
-		if err != nil {
-			panic(err)
-		}
-		if !*keep {
-			defer os.RemoveAll(testdir) // clean up
-		}
-	}
-
-	binary := path.Join(testdir, "foo.exe")
-	gclsp_prof := path.Join(testdir, "gclsp_prof.exe")
-	lspdir := path.Join(testdir, "gclsp")
-
-	cmd := exec.Command("go", "build", "-o", binary, "-gcflags=-json=0,"+lspdir, "testdata/foo.go")
-	_ = runCmd(cmd, t)
-
-	cmd = exec.Command("go", "build", "-o", gclsp_prof, ".")
-	_ = runCmd(cmd, t)
-
-	cmd = exec.Command(binary)
-	cmd.Dir = testdir
-	_ = runCmd(cmd, t)
-
-	cmd = exec.Command(gclsp_prof, "-a=0", "-b=0", "-t=4.0", "-s", "./gclsp", "foo.prof")
-	cmd.Dir = testdir
-	cmd.Env = replaceEnv(os.Environ(), "PWD", testdir)
-	out := string(runCmd(cmd, t))
-	t.Logf("\n%s", out)
-
-	split := strings.Split(out, "\n")
-
-	if len(split) > 9 {
-		split = split[len(split)-9:]
-	}
-	matchREs := []string{
-		".*/foo[.]go:94 :: isInBounds [(]at line 94[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:20",
-		".*/foo[.]go:94 :: isInBounds [(]at line 94[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:20",
-		".*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:16",
-		".*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:16",
-	}
-	for i, s := range split {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		re := matchREs[i]
-		match, err := regexp.MatchString(re, s)
-		if err != nil {
-			panic(err)
-		}
-		if !match {
-			t.Errorf("%s failed to match %s", s, re)
-		} else {
-			t.Logf("Line %d matched regexp %s", i, re)
-		}
-	}
 }
