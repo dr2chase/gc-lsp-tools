@@ -61,7 +61,7 @@ func TestIt(t *testing.T) {
 	cmd.Dir = testdir
 	_ = runCmd(cmd, t)
 
-	cmd = exec.Command(gclsp_prof, "-a=0", "-b=0", "-t=4.0", "-s", "./gclsp", "foo.prof")
+	cmd = exec.Command(gclsp_prof, "-a=1", "-b=1", "-t=12.0", "-s", "./gclsp", "foo.prof")
 	cmd.Dir = testdir
 	cmd.Env = replaceEnv(os.Environ(), "PWD", testdir)
 	out := string(runCmd(cmd, t))
@@ -69,19 +69,23 @@ func TestIt(t *testing.T) {
 
 	split := strings.Split(out, "\n")
 
-	if len(split) > 9 { // Last line is blank.
-		split = split[len(split)-9:]
+	if len(split) > 13 { // Last line is blank.
+		split = split[len(split)-13:]
 	}
 	// This can fail if the profiles are far from expected values, which might happen sometimes or on some architectures.
 	matchREs := []string{
-		".*/foo[.]go:94 :: isInBounds [(]at line 94[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:20",
-		".*/foo[.]go:94 :: isInBounds [(]at line 94[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:20",
-		".*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:16",
-		".*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
-		".*/foo[.]go:20 :: [$].*/foo[.]go:16",
+		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at later line 37[)]",
+		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
+		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
+		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
+		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at line 39[)]",
+		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:20",
+		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at later line 37[)]",
+		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
+		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at line 38[)]",
+		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
+		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at line 39[)]",
+		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:20",
 	}
 	for i, s := range split {
 		s = strings.TrimSpace(s)

@@ -131,9 +131,12 @@ information in LspDir to match missed optimizations against hotspots.
 					}
 					fl := p.FileLine[0]
 					if near(d, fl.Line) {
-						nearby := "nearby "
-						if int64(d.Range.Start.Line) == p.FileLine[0].Line {
-							nearby = ""
+						nearby := ""
+						if int64(d.Range.Start.Line) < p.FileLine[0].Line {
+							nearby = "earlier "
+						}
+						if int64(d.Range.Start.Line) < p.FileLine[0].Line {
+							nearby = "later "
 						}
 						if d.Message != "" {
 							fmt.Printf("%5.1f%%, %s:%d :: %s, %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, d.Message, nearby, d.Range.Start.Line)
