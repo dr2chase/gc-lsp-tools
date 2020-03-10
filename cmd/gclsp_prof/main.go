@@ -9,9 +9,12 @@ import (
 	"fmt"
 	"github.com/dr2chase/gc-lsp-tools/lsp"
 	"github.com/dr2chase/gc-lsp-tools/prof"
+	"io/ioutil"
 	"math"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime/pprof"
 	"strings"
 )
@@ -20,36 +23,21 @@ var pwd string = os.Getenv("PWD")
 var goroot string = os.Getenv("GOROOT")
 var gopath string = os.Getenv("GOPATH")
 var home string = os.Getenv("HOME")
-var strip bool
 
-// shorten replaces a string's prefix with $EV if $EV == that prefix.
-// EV is one of PWD, GOROOT, GOPATH, and HOME.
-func shorten(s string) string {
-	if !strip {
-		return s
-	}
-	hasPrefix := func(s, prefix string) bool {
-		return prefix != "" && strings.HasPrefix(s, prefix)
-	}
-	switch {
-	case hasPrefix(s, pwd):
-		return "$PWD" + s[len(pwd):]
-	case hasPrefix(s, goroot):
-		return "$GOROOT" + s[len(goroot):]
-	case hasPrefix(s, gopath):
-		return "$GOPATH" + s[len(gopath):]
-	case hasPrefix(s, home):
-		return "$HOME" + s[len(home):]
-	}
-	return s
-}
+
+type abbreviation struct{substring, replace string}
+var shortenEVs string = "PWD,GOROOT,GOPATH,HOME"
+var abbreviations []abbreviation
+
+var bench string
+var keep string
 
 // gclsp_prof [-v] [-a=n] [-b=n] [-t=f.f] [-s] [-cpuprofile=file]  lspdir profile1 [ profile2 ... ]
 // Produces a summary of optimizations (if any) that were not or could not be applied at hotspots in the profile.
 func main() {
 	verbose := false
-	before := int64(2)
-	after := int64(1)
+	before := int64(0)
+	after := int64(0)
 	cpuprofile := ""
 	threshold := 1.0
 
@@ -58,7 +46,9 @@ func main() {
 	flag.Int64Var(&after, "a", after, "Include log entries this many lines after a profile hot spot")
 	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
 	flag.Float64Var(&threshold, "t", threshold, "Threshold percentage below which profile entries will be ignored")
-	flag.BoolVar(&strip, "s", strip, "Shorten file names by substituting PWD, GOROOT, GOPATH, HOME")
+	flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
+	flag.StringVar(&bench, "bench", bench, "Run 'bench' benchmarks in current directory and reports hotspot(s). Passes -bench=whatever to go test, as well as arguments past --")
+	flag.StringVar(&keep, "keep", keep, "For -bench, keep the intermedia results in <-keep>.lspdir and <-keep>.prof")
 
 	usage := func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -84,7 +74,24 @@ information in LspDir to match missed optimizations against hotspots.
 		}()
 	}
 
+	// Assemble abbreviations
+	ss := strings.Split(shortenEVs, ",")
+	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		v := os.Getenv(s)
+		if v != "" {
+			abbreviations = append(abbreviations, abbreviation{substring:v, replace:"$"+s})
+		}
+	}
+
 	args := flag.Args()
+
+	if bench != "" {
+		var cleanup func()
+		args, cleanup = runBench(args)
+		defer cleanup()
+	}
+
 	if len(args) < 2 {
 		usage()
 		os.Exit(1)
@@ -130,19 +137,19 @@ information in LspDir to match missed optimizations against hotspots.
 						p.FileLine[i].SourceFile = shorten(fl.SourceFile)
 					}
 					fl := p.FileLine[0]
+
 					if near(d, fl.Line) {
 						nearby := ""
 						if int64(d.Range.Start.Line) < p.FileLine[0].Line {
 							nearby = "earlier "
 						}
-						if int64(d.Range.Start.Line) < p.FileLine[0].Line {
+						if int64(d.Range.Start.Line) > p.FileLine[0].Line {
 							nearby = "later "
 						}
-						if d.Message != "" {
-							fmt.Printf("%5.1f%%, %s:%d :: %s, %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, d.Message, nearby, d.Range.Start.Line)
-						} else {
-							fmt.Printf("%5.1f%%, %s:%d :: %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, nearby, d.Range.Start.Line)
-						}
+
+						// Sort through inlines first to determine if this is an exact match or earlier/later/nearby
+
+						// Pull diagnostic inline location from RelatedInformation
 						profileInlines := p.FileLine[1:]
 						var diagnosticInlines []prof.FileLine
 						for _, ri := range d.RelatedInformation {
@@ -165,10 +172,27 @@ information in LspDir to match missed optimizations against hotspots.
 							})
 						}
 
-						// Handle inlining of either profile or diagnostic
+						// Match up inlines for profile and diagnostic for "nearness" and printing.
 						var profLocs []string
 						var diagLocs []string
 						for i, j := 0, 0; i < len(profileInlines) || j < len(diagnosticInlines); i, j = i+1, j+1 {
+							// Adjust declarations of "nearness", for inlines insensitive to before/after for now.
+							if nearby == "" {
+								if i < len(profileInlines) && j < len(diagnosticInlines) {
+									if diagnosticInlines[j].SourceFile != profileInlines[i].SourceFile {
+										nearby = "nearby (inline) " // different files
+									} else if diagnosticInlines[j].Line < profileInlines[i].Line {
+										nearby = "earlier (inline) "
+									} else if diagnosticInlines[j].Line < profileInlines[i].Line {
+										nearby = "later (inline) "
+									} else {
+										// still the same
+									}
+								} else {
+									nearby = "nearby (inline) " // mismatched depths
+								}
+							}
+
 							if i < len(profileInlines) {
 								il := profileInlines[i]
 								profLocs = append(profLocs, fmt.Sprintf("%s:%d", il.SourceFile, il.Line))
@@ -182,8 +206,16 @@ information in LspDir to match missed optimizations against hotspots.
 								diagLocs = append(diagLocs, "")
 							}
 						}
+
+						// Now it's known if it's nearby or not, start printing....
+						if d.Message != "" {
+							fmt.Printf("%5.1f%%, %s:%d :: %s, %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, d.Message, nearby, d.Range.Start.Line)
+						} else {
+							fmt.Printf("%5.1f%%, %s:%d :: %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, nearby, d.Range.Start.Line)
+						}
+
+						// Print inline information, as necessary
 						if len(profLocs) == 0 {
-							// no inlining, never mind
 							continue
 						}
 						// make them all, respectively, the same length
@@ -213,4 +245,86 @@ information in LspDir to match missed optimizations against hotspots.
 			}
 		}
 	}
+}
+
+func runBench(testargs []string) (newargs []string, cleanup func()) {
+	testdir, err := os.Getwd()
+	cleanup = func(){}
+	if keep == "" {
+		testdir, err = ioutil.TempDir("", "GcLspProfBench")
+		if err != nil {
+			panic(err)
+		}
+		cleanup = func() { os.RemoveAll(testdir) }
+		abbreviations = append(abbreviations, abbreviation{substring:testdir, replace:"$TEMPDIR"})
+		keep = "gclsp-bench"
+	}
+	// go test -gcflags=all=-json=0,testdir/gclsp -cpuprofile=testdir/test.prof -bench=Bench .
+	lsp := filepath.Join(testdir, keep+".lspdir")
+	cpuprofile := filepath.Join(testdir, keep+".prof")
+
+	cmdArgs := []string{"test", "-gcflags=all=-json=0,"+lsp, "-cpuprofile="+cpuprofile, "-bench="+bench, "."}
+	cmdArgs = append(cmdArgs, testargs...)
+	cmd := exec.Command("go", cmdArgs...)
+	out := runCmd(cmd)
+	fmt.Printf("%s\n", string(out))
+	newargs =  []string{lsp, cpuprofile}
+	return
+}
+
+// runCmd wraps running a command with an error check,
+// failing the test if there is an error.  The combined
+// output is returned.
+func runCmd(cmd *exec.Cmd) []byte {
+	line := "("
+	wd := pwd
+	if cmd.Dir != "" && cmd.Dir != "." && cmd.Dir != pwd {
+		wd = cmd.Dir
+		line += " cd " + trimCwd(cmd.Dir, pwd, false) + " ; "
+	}
+	// line += trim(cmd.Path, wd)
+	for i, s := range cmd.Args {
+		line += " " + trimCwd(s, wd, i == 0)
+	}
+	line += " )"
+	fmt.Printf("%s\n", line)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n\n%v", string(out), err)
+		os.Exit(1)
+	}
+	return out
+}
+// trim shortens s to be relative to cwd, if possible, and also
+// replaces embedded instances of certain environment variables.
+// needsDotSlash indicates that s is something like a command
+// and must contain at least one path separator (because "." is
+// by sensible default not on paths).
+func trimCwd(s, cwd string, needsDotSlash bool) string {
+	if s == cwd {
+		return "."
+	}
+	if strings.HasPrefix(s, cwd+"/") {
+		s = s[1+len(cwd):]
+	} else if strings.HasPrefix(s, cwd+string(filepath.Separator)) {
+		s = s[len(cwd+string(filepath.Separator)):]
+	} else {
+		return shorten(s)
+	}
+	if needsDotSlash {
+		s = "." + string(filepath.Separator) + s
+	}
+	return s
+}
+
+// shorten replaces instances of $EV in a string.
+// EV is one of PWD, GOROOT, GOPATH, and HOME.
+func shorten(s string) string {
+	if shortenEVs == "" {
+		return s
+	}
+	for _, a := range abbreviations {
+		s = strings.ReplaceAll(s, a.substring, a.replace)
+	}
+	return s
 }

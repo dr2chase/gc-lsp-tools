@@ -1,12 +1,7 @@
-// Copyright 2020 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package main
+package main_test
 
 import (
-	"os"
-	"runtime/pprof"
+	"testing"
 )
 
 type Row []float64
@@ -17,7 +12,7 @@ func (a SqMat) get(i,j int) float64 {
 }
 
 func (a SqMat) put(i,j int, x float64) {
-	 a[i][j] = x
+	a[i][j] = x
 }
 
 //go:noinline -- Redundant, but future-proofing against inline of FOR loops
@@ -95,18 +90,7 @@ func colGets(a SqMat, k int, x float64) {
 	}
 }
 
-
-
 func Do(N int) {
-	cpuprofile := "foo.prof"
-	if cpuprofile != "" {
-		file, _ := os.Create(cpuprofile)
-		pprof.StartCPUProfile(file)
-		defer func() {
-			pprof.StopCPUProfile()
-			file.Close()
-		} ()
-	}
 
 	a := matrix(N)
 	b := matrix(N)
@@ -128,6 +112,8 @@ func Do(N int) {
 	}
 }
 
-func main() {
-	Do(512)
+func BenchmarkDo(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Do(256)
+	}
 }
