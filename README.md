@@ -14,7 +14,7 @@ If you have an existing Go benchmark that exercises the code you'd like to measu
 you can generate and display the missed (or not possible) optimizations at hotspots directly.
 For example:
 ```
-# Get a benchmark
+# Get a benchmark if you don't have one of your own
 git clone https://github.com/dr2chase/gc-lsp-tools'
 cd gc-lsp-tools/cmd/gclsp_prof/testdata
 # 
@@ -74,14 +74,14 @@ or (all of your application, likely to pick up some GC and runtime code too)
 go build -gcflags=all=-json=0,$PWD/foo.lspdir myapp.go
 ```
 The `-json` option normally wants an absolute path, and the zero is a version number.
-[The option logging source code](https://go.googlesource.com/go/+/refs/heads/master/src/cmd/compile/internal/logopt/log_opts.go#24)
+[The compilation-logging source code](https://go.googlesource.com/go/+/refs/heads/master/src/cmd/compile/internal/logopt/log_opts.go#24)
 explains the flags, directory structure and format for data stored in `$PWD/foo.lspdir` (but you don't need to know this to use this tool).
 
 Then run your application, which will create a profile, for example `foo.prof`.
 
 Finally, run, for example
 ```
-gclsp_prof -s -t=5.0 $PWD/foo.lspdir foo.prof
+gclsp_prof -t=5.0 $PWD/foo.lspdir foo.prof
 ```
 
 This will produce output that looks something like:
@@ -118,9 +118,8 @@ Possibly useful options include:
 - -b=n, mention compiler diagnostics from n lines before a hot spot (default 0).
 - -t=n.f, (a float) samples less hot than the threshold percentage are ignored (default 1.0).
 - -s=ev1,ev2,...,  list of environment variables to use to shorten paths.  Default "PWD,GOROOT,GOPATH,HOME".
-
-- -v, verbose.  You don't want verbose.
 - -cpuprofile=file, because every application should have this option.
 - -bench=Bench..., if not empty, run "go test -bench=Bench... ." with the additional flags necessary to generate
   the lsp information and profile, then run gclsp_prof on those with the other flags.
-- -keep=basename, for -bench, put the lsp and profile files in $PWD/\<basename\>.{lspdir,prof}
+- -keep=\<basename\>, for -bench, put the lsp and profile files in $PWD/\<basename\>.{lspdir,prof}
+- -v, verbose.  You don't want verbose.
