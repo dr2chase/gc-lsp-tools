@@ -54,10 +54,45 @@ func FileToSortedProfile(f *os.File) (*profile.Profile, int, float64) {
 	return p1, countIndex, countTotal
 }
 
+type flsMap map[FileLine]struct {
+	index int
+	il *flsMap
+}
+
+func (m *flsMap) put(s []FileLine, index int) {
+	x := (*m)[s[0]]
+	if len(s) == 1 {
+		x.index = index
+		(*m)[s[0]] = x
+		return
+	}
+	if x.il == nil {
+		t := make(flsMap)
+		x.il = &t
+	}
+	x.il.put(s[1:], index)
+}
+
+func (m *flsMap) get(s []FileLine) (index int, ok bool) {
+	x, xok := (*m)[s[0]]
+	if !xok {
+		return -1, false
+	}
+	if len(s) == 1 {
+		return x.index, true
+	}
+	if x.il == nil {
+		return -1, false
+	}
+	return x.il.get(s[1:])
+
+}
+
 // FromProtoBuf runs go tool pprof on the supplied profiles to generate
 // the (-flat, -lines) protobuf output, and then processes that protobuf
 // to yield a sorted profile of sample percentages and sample locations.
-func FromProtoBuf(profiles []string) ([]*ProfileItem, error) {
+// If combine is true, samples with equal file(s) and line(s) are merged.
+func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
 	var pi []*ProfileItem
 	tempFile, err := ioutil.TempFile("", "profile.*.pb.gz")
 	if err != nil {
@@ -84,6 +119,8 @@ func FromProtoBuf(profiles []string) ([]*ProfileItem, error) {
 
 	p, countIndex, countTotal := FileToSortedProfile(tempFile)
 
+	flsmap := make(flsMap)
+
 	for _, s := range p.Sample {
 		c := float64(s.Value[countIndex]) / countTotal
 		lines := s.Location[0].Line
@@ -95,10 +132,24 @@ func FromProtoBuf(profiles []string) ([]*ProfileItem, error) {
 				Line:       line.Line,
 			}
 		}
+
+		if combine {
+			i, ok := flsmap.get(fileLines)
+			if ok {
+				pi[i].FlatPercent += 100*c
+				continue
+			}
+			flsmap.put(fileLines, len(pi))
+		}
+
 		pi = append(pi, &ProfileItem{
 			FlatPercent: 100 * c,
 			FileLine:    fileLines,
 		})
+	}
+
+	if combine {
+		sort.Slice(pi, func(i,j int) bool { return pi[i].FlatPercent < pi[j].FlatPercent})
 	}
 	return pi, nil
 }
