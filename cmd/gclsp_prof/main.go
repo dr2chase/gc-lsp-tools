@@ -24,8 +24,8 @@ var goroot string = os.Getenv("GOROOT")
 var gopath string = os.Getenv("GOPATH")
 var home string = os.Getenv("HOME")
 
+type abbreviation struct{ substring, replace string }
 
-type abbreviation struct{substring, replace string}
 var shortenEVs string = "PWD,GOROOT,GOPATH,HOME"
 var abbreviations []abbreviation
 
@@ -38,10 +38,12 @@ func main() {
 	verbose := false
 	before := int64(0)
 	after := int64(0)
+	explain := false
 	cpuprofile := ""
 	threshold := 1.0
 
 	flag.BoolVar(&verbose, "v", verbose, "Spews information about profiles read and lsp files")
+	flag.BoolVar(&explain, "e", explain, "Also supply \"explanations\"")
 	flag.Int64Var(&before, "b", before, "Include log entries this many lines before a profile hot spot")
 	flag.Int64Var(&after, "a", after, "Include log entries this many lines after a profile hot spot")
 	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
@@ -80,7 +82,7 @@ information in LspDir to match missed optimizations against hotspots.
 		s = strings.TrimSpace(s)
 		v := os.Getenv(s)
 		if v != "" {
-			abbreviations = append(abbreviations, abbreviation{substring:v, replace:"$"+s})
+			abbreviations = append(abbreviations, abbreviation{substring: v, replace: "$" + s})
 		}
 	}
 
@@ -130,7 +132,7 @@ information in LspDir to match missed optimizations against hotspots.
 			cd := byFile[p.FileLine[0].SourceFile]
 			if cd != nil && len(cd.Diagnostics) > 0 {
 				for _, d := range cd.Diagnostics {
-					if d.Code == "inlineCall" { // Don't want to see this.
+					if d.Code == "inlineCall" { // Don't want to see these, they are confusing and eventually removed..
 						continue
 					}
 					for i, fl := range p.FileLine {
@@ -151,26 +153,7 @@ information in LspDir to match missed optimizations against hotspots.
 
 						// Pull diagnostic inline location from RelatedInformation
 						profileInlines := p.FileLine[1:]
-						var diagnosticInlines []prof.FileLine
-						for _, ri := range d.RelatedInformation {
-							if ri.Message != "inlineLoc" {
-								// don't bother with additional messages, e.g. escape explanations
-								break
-							}
-							uri := string(ri.Location.URI)
-
-							if strings.HasPrefix(uri, "file://") {
-								s, err := url.PathUnescape(uri[7:])
-								if err != nil { // TODO should we say something?
-									s = uri[7:]
-								}
-								uri = s
-							}
-							diagnosticInlines = append(diagnosticInlines, prof.FileLine{
-								SourceFile: shorten(uri),
-								Line:       int64(ri.Location.Range.Start.Line),
-							})
-						}
+						diagnosticInlines, remainingRelated := inlinesFromRelated(d.RelatedInformation)
 
 						// Match up inlines for profile and diagnostic for "nearness" and printing.
 						var profLocs []string
@@ -207,8 +190,10 @@ information in LspDir to match missed optimizations against hotspots.
 							}
 						}
 
+						tab := "        " // Tabs vary
+
 						// Now it's known if it's nearby or not, start printing....
-						if d.Message != "" {
+						if d.Message != "" { // Note '%5.1f%%, ' is 8 runes wide
 							fmt.Printf("%5.1f%%, %s:%d :: %s, %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, d.Message, nearby, d.Range.Start.Line)
 						} else {
 							fmt.Printf("%5.1f%%, %s:%d :: %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, nearby, d.Range.Start.Line)
@@ -238,7 +223,18 @@ information in LspDir to match missed optimizations against hotspots.
 						makeSameLengths(profLocs)
 						makeSameLengths(diagLocs)
 						for i := 0; i < len(profLocs); i++ {
-							fmt.Printf("\t%s :: %s\n", profLocs[i], diagLocs[i])
+							fmt.Printf("%8s%s :: %s\n", tab, profLocs[i], diagLocs[i])
+						}
+						// Handle extended "explanations".
+						if explain {
+							for len(remainingRelated) > 0 {
+								fl := fileLineFromRelated(&remainingRelated[0])
+								fmt.Printf("%sexplanation :: %s:%d, %s\n", tab, fl.SourceFile, fl.Line, remainingRelated[0].Message)
+								diagnosticInlines, remainingRelated = inlinesFromRelated(remainingRelated[1:])
+								for _, fl := range diagnosticInlines {
+									fmt.Printf("%19s :: %s:%d\n", tab, fl.SourceFile, fl.Line)
+								}
+							}
 						}
 					}
 				}
@@ -247,28 +243,63 @@ information in LspDir to match missed optimizations against hotspots.
 	}
 }
 
+// fileLineFromRelated returns the normalized file and line number from the
+// Location of its DiagnosticRelatedInformation argument.
+func fileLineFromRelated(ri *lsp.DiagnosticRelatedInformation) prof.FileLine {
+	uri := string(ri.Location.URI)
+	if strings.HasPrefix(uri, "file://") {
+		s, err := url.PathUnescape(uri[7:])
+		if err != nil { // TODO should we say something?
+			s = uri[7:]
+		}
+		uri = s
+	}
+	return prof.FileLine{
+		SourceFile: shorten(uri),
+		Line:       int64(ri.Location.Range.Start.Line),
+	}
+}
+
+// inlinesFromRelated extracts any inline locations from a slice of DiagnosticRelatedInformation
+// and returns the file+line for the inlines and the remaining subslice of DiagnosticRelatedInformation.
+func inlinesFromRelated(relatedInformation []lsp.DiagnosticRelatedInformation) ([]prof.FileLine, []lsp.DiagnosticRelatedInformation) {
+	var diagnosticInlines []prof.FileLine
+	for i, ri := range relatedInformation {
+		if ri.Message != "inlineLoc" {
+			return diagnosticInlines, relatedInformation[i:]
+		}
+		diagnosticInlines = append(diagnosticInlines, fileLineFromRelated(&ri))
+	}
+	return diagnosticInlines, nil
+}
+
+// runBench runs a benchmark bench (see global) found in the currrent directory,
+// with appropriate flags to collect both LSP-encoded compiler diagnostics and
+// a cpuprofile.  The returned string contains the names of the diagnostics directory
+// and cpuprofile file, and a cleanup function to remove any temporary directories
+// created here.
 func runBench(testargs []string) (newargs []string, cleanup func()) {
 	testdir, err := os.Getwd()
-	cleanup = func(){}
+	cleanup = func() {}
 	if keep == "" {
 		testdir, err = ioutil.TempDir("", "GcLspProfBench")
 		if err != nil {
 			panic(err)
 		}
 		cleanup = func() { os.RemoveAll(testdir) }
-		abbreviations = append(abbreviations, abbreviation{substring:testdir, replace:"$TEMPDIR"})
+		abbreviations = append(abbreviations, abbreviation{substring: testdir, replace: "$TEMPDIR"})
 		keep = "gclsp-bench"
 	}
 	// go test -gcflags=all=-json=0,testdir/gclsp -cpuprofile=testdir/test.prof -bench=Bench .
 	lsp := filepath.Join(testdir, keep+".lspdir")
 	cpuprofile := filepath.Join(testdir, keep+".prof")
 
-	cmdArgs := []string{"test", "-gcflags=all=-json=0,"+lsp, "-cpuprofile="+cpuprofile, "-bench="+bench, "."}
+	cmdArgs := []string{"test", "-gcflags=all=-json=0," + lsp, "-cpuprofile=" + cpuprofile, "-bench=" + bench, "."}
 	cmdArgs = append(cmdArgs, testargs...)
 	cmd := exec.Command("go", cmdArgs...)
 	out := runCmd(cmd)
 	fmt.Printf("%s\n", string(out))
-	newargs =  []string{lsp, cpuprofile}
+	newargs = []string{lsp, cpuprofile}
 	return
 }
 
@@ -295,6 +326,7 @@ func runCmd(cmd *exec.Cmd) []byte {
 	}
 	return out
 }
+
 // trim shortens s to be relative to cwd, if possible, and also
 // replaces embedded instances of certain environment variables.
 // needsDotSlash indicates that s is something like a command

@@ -4,15 +4,15 @@ import (
 	"testing"
 )
 
-type Row []float64
+type Row []*float64
 type SqMat []Row
 
 func (a SqMat) get(i,j int) float64 {
-	return a[i][j]
+	return *a[i][j]
 }
 
 func (a SqMat) put(i,j int, x float64) {
-	a[i][j] = x
+	a[i][j] = &x
 }
 
 //go:noinline -- Redundant, but future-proofing against inline of FOR loops
