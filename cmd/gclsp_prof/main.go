@@ -31,6 +31,7 @@ var abbreviations []abbreviation
 
 var bench string
 var keep string
+var packages string
 
 // gclsp_prof [-v] [-a=n] [-b=n] [-t=f.f] [-s] [-cpuprofile=file]  lspdir profile1 [ profile2 ... ]
 // Produces a summary of optimizations (if any) that were not or could not be applied at hotspots in the profile.
@@ -51,6 +52,7 @@ func main() {
 	flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
 	flag.StringVar(&bench, "bench", bench, "Run 'bench' benchmarks in current directory and reports hotspot(s). Passes -bench=whatever to go test, as well as arguments past --")
 	flag.StringVar(&keep, "keep", keep, "For -bench, keep the intermedia results in <-keep>.lspdir and <-keep>.prof")
+	flag.StringVar(&packages, "packages", packages, "For -bench, get diagnostics for the listed packages (see 'go help packages')")
 
 	usage := func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -294,7 +296,12 @@ func runBench(testargs []string) (newargs []string, cleanup func()) {
 	lsp := filepath.Join(testdir, keep+".lspdir")
 	cpuprofile := filepath.Join(testdir, keep+".prof")
 
-	cmdArgs := []string{"test", "-gcflags=all=-json=0," + lsp, "-cpuprofile=" + cpuprofile, "-bench=" + bench, "."}
+	if packages != "" {
+		packages = packages + "="
+	}
+	gcFlags := "-gcflags="+packages+"-json=0,"+lsp
+
+	cmdArgs := []string{"test", gcFlags, "-cpuprofile=" + cpuprofile, "-bench=" + bench, "."}
 	cmdArgs = append(cmdArgs, testargs...)
 	cmd := exec.Command("go", cmdArgs...)
 	out := runCmd(cmd)

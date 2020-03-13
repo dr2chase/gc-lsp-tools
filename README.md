@@ -114,13 +114,14 @@ which should produce `foo.lspdir` and `foo.prof` for `testdata/foo.go`.
 
 Possibly useful options include:
 
-- -a=n, mention compiler diagnostics from n lines after a hot spot (default 0).
-- -b=n, mention compiler diagnostics from n lines before a hot spot (default 0).
-- -t=n.f, (a float) samples less hot than the threshold percentage are ignored (default 1.0).
-- -e, for diagnosticd with extended explanations (escape analysis soon), also show the extended explanations.
-- -bench=Bench..., if not empty, run "go test -bench=Bench... ." with the additional flags necessary to generate
+- -a=*N*, mention compiler diagnostics from *N* lines after a hot spot (default 0).
+- -b=*N*, mention compiler diagnostics from *N* lines before a hot spot (default 0).
+- -t=*N.F*, (a float) samples less hot than the threshold percentage are ignored (default 1.0).
+- -e, for diagnostics with extended explanations (escape analysis soon), also show the extended explanations.
+- -bench=*Bench...*, if not empty, run "`go test -bench=`*Bench....*" with the additional flags necessary to generate
   the lsp information and profile, then run gclsp_prof on those with the other flags.
-- -keep=\<basename\>, for -bench, put the lsp and profile files in $PWD/\<basename\>.{lspdir,prof}
-- -s=ev1,ev2,...,  list of environment variables to use to shorten paths.  Default "PWD,GOROOT,GOPATH,HOME".
-- -cpuprofile=file, because every application should have this option.
+- -packages=*packagePattern*, collect diagnostics for the listed packages (default is local directory, see `go help packages`)
+- -keep=*basename*, for -bench, put the lsp and profile files in $PWD/*basename*.{lspdir,prof}
+- -s=*ev1,ev2,...*,  list of environment variables to use to shorten paths.  Default "PWD,GOROOT,GOPATH,HOME".
+- -cpuprofile=*file*, because every application should have this option.
 - -v, verbose.  You don't want verbose.
