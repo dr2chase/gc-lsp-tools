@@ -71,6 +71,7 @@ func (m *flsMap) put(s []FileLine, index int) {
 		x.il = &t
 	}
 	x.il.put(s[1:], index)
+	(*m)[s[0]] = x
 }
 
 func (m *flsMap) get(s []FileLine) (index int, ok bool) {
@@ -93,7 +94,6 @@ func (m *flsMap) get(s []FileLine) (index int, ok bool) {
 // to yield a sorted profile of sample percentages and sample locations.
 // If combine is true, samples with equal file(s) and line(s) are merged.
 func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
-	var pi []*ProfileItem
 	tempFile, err := ioutil.TempFile("", "profile.*.pb.gz")
 	if err != nil {
 		panic(err)
@@ -121,11 +121,13 @@ func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
 
 	flsmap := make(flsMap)
 
+	var pi []*ProfileItem
+
 	for _, s := range p.Sample {
 		c := float64(s.Value[countIndex]) / countTotal
 		lines := s.Location[0].Line
 		l := len(lines)
-		fileLines := make([]FileLine, l)
+		fileLines := make([]FileLine, l, l)
 		for i, line := range lines {
 			fileLines[l-i-1] = FileLine{
 				SourceFile: line.Function.Filename,
