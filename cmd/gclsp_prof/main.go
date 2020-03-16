@@ -10,7 +10,6 @@ import (
 	"github.com/dr2chase/gc-lsp-tools/lsp"
 	"github.com/dr2chase/gc-lsp-tools/prof"
 	"io/ioutil"
-	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -129,113 +128,99 @@ information in LspDir to match missed optimizations against hotspots.
 		return line-before <= diag && diag <= line+after
 	}
 
+	tab := "        " // Tabs vary, we want 8.
+
 	for _, p := range pi {
 		if p.FlatPercent >= threshold {
 			cd := byFile[p.FileLine[0].SourceFile]
 			if cd != nil && len(cd.Diagnostics) > 0 {
+				printedProfileLine := false
+				profileInlines := p.FileLine[1:]
+				for i, fl := range p.FileLine {
+					p.FileLine[i].SourceFile = shorten(fl.SourceFile)
+				}
+				fl := p.FileLine[0]
+
+				// Defer printing profile line till at least one diagnostic is shown to match
 				for _, d := range cd.Diagnostics {
 					if d.Code == "inlineCall" { // Don't want to see these, they are confusing and eventually removed..
 						continue
 					}
-					for i, fl := range p.FileLine {
-						p.FileLine[i].SourceFile = shorten(fl.SourceFile)
+					if !near(d, fl.Line) {
+						continue
 					}
-					fl := p.FileLine[0]
+					if !printedProfileLine {
+						printedProfileLine = true
 
-					if near(d, fl.Line) {
-						nearby := ""
-						if int64(d.Range.Start.Line) < p.FileLine[0].Line {
-							nearby = "earlier "
+						fmt.Printf("%5.1f%%, %s:%d)\n", p.FlatPercent, fl.SourceFile, fl.Line)
+
+						for _, il := range profileInlines {
+							fmt.Printf("%12s(inline) %s:%d\n", tab, il.SourceFile, il.Line)
 						}
-						if int64(d.Range.Start.Line) > p.FileLine[0].Line {
-							nearby = "later "
-						}
+					}
 
-						// Sort through inlines first to determine if this is an exact match or earlier/later/nearby
+					nearby := ""
+					if int64(d.Range.Start.Line) < p.FileLine[0].Line {
+						nearby = "earlier "
+					}
+					if int64(d.Range.Start.Line) > p.FileLine[0].Line {
+						nearby = "later "
+					}
 
-						// Pull diagnostic inline location from RelatedInformation
-						profileInlines := p.FileLine[1:]
-						diagnosticInlines, remainingRelated := inlinesFromRelated(d.RelatedInformation)
+					// Now it's known if it's nearby or not, start printing....
+					if d.Message != "" { // Note '%5.1f%%, ' is 8 runes wide
+						fmt.Printf("%8s%s, %s (at %sline %d)\n", tab, d.Code, d.Message, nearby, d.Range.Start.Line)
+					} else {
+						fmt.Printf("%8s%s (at %sline %d)\n", tab, d.Code, nearby, d.Range.Start.Line)
+					}
 
-						// Match up inlines for profile and diagnostic for "nearness" and printing.
-						var profLocs []string
-						var diagLocs []string
-						for i, j := 0, 0; i < len(profileInlines) || j < len(diagnosticInlines); i, j = i+1, j+1 {
-							// Adjust declarations of "nearness", for inlines insensitive to before/after for now.
-							if nearby == "" {
-								if i < len(profileInlines) && j < len(diagnosticInlines) {
-									if diagnosticInlines[j].SourceFile != profileInlines[i].SourceFile {
-										nearby = "nearby (inline) " // different files
-									} else if diagnosticInlines[j].Line < profileInlines[i].Line {
-										nearby = "earlier (inline) "
-									} else if diagnosticInlines[j].Line < profileInlines[i].Line {
-										nearby = "later (inline) "
-									} else {
-										// still the same
-									}
+					diagnosticInlines, remainingRelated := inlinesFromRelated(d.RelatedInformation)
+
+					// Sort through inlines first to determine if this is an exact match or earlier/later/nearby
+					var diagLocs []string
+					inlineNearby := ""
+					for i, j := 0, 0; i < len(profileInlines) || j < len(diagnosticInlines); i, j = i+1, j+1 {
+						// Adjust declarations of "nearness", for inlines insensitive to before/after for now.
+						if inlineNearby == "" && nearby == "" {
+							if i < len(profileInlines) && j < len(diagnosticInlines) {
+								if diagnosticInlines[j].SourceFile != profileInlines[i].SourceFile {
+									inlineNearby = "-nearby " // different files
+								} else if diagnosticInlines[j].Line < profileInlines[i].Line {
+									inlineNearby = "-earlier "
+								} else if diagnosticInlines[j].Line < profileInlines[i].Line {
+									inlineNearby = "-later "
 								} else {
-									nearby = "nearby (inline) " // mismatched depths
+									// still the same
 								}
-							}
-
-							if i < len(profileInlines) {
-								il := profileInlines[i]
-								profLocs = append(profLocs, fmt.Sprintf("%s:%d", il.SourceFile, il.Line))
 							} else {
-								profLocs = append(profLocs, "")
-							}
-							if j < len(diagnosticInlines) {
-								il := diagnosticInlines[j]
-								diagLocs = append(diagLocs, fmt.Sprintf("%s:%d", il.SourceFile, il.Line))
-							} else {
-								diagLocs = append(diagLocs, "")
+								inlineNearby = "-nearby " // mismatched depths
 							}
 						}
 
-						tab := "        " // Tabs vary
-
-						// Now it's known if it's nearby or not, start printing....
-						if d.Message != "" { // Note '%5.1f%%, ' is 8 runes wide
-							fmt.Printf("%5.1f%%, %s:%d :: %s, %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, d.Message, nearby, d.Range.Start.Line)
+						if j < len(diagnosticInlines) {
+							il := diagnosticInlines[j]
+							diagLocs = append(diagLocs, fmt.Sprintf("(inline%s)  %s:%d", inlineNearby, il.SourceFile, il.Line))
+							nearby = "not empty" // prevent repeats
+							inlineNearby = ""
 						} else {
-							fmt.Printf("%5.1f%%, %s:%d :: %s (at %sline %d)\n", p.FlatPercent, fl.SourceFile, fl.Line, d.Code, nearby, d.Range.Start.Line)
+							break; // Exit after noticing that the depths are mismatched
 						}
+					}
 
-						// Print inline information, as necessary
-						if len(profLocs) == 0 {
-							continue
-						}
-						// make them all, respectively, the same length
-						makeSameLengths := func(ss []string) {
-							max := 0
-							min := math.MaxInt32
-							for _, s := range ss {
-								if len(s) > max {
-									max = len(s)
-								}
-								if len(s) < min {
-									min = len(s)
-								}
-							}
-							pad := strings.Repeat(" ", max-min)
-							for i, s := range ss {
-								ss[i] = s + pad[0:max-len(s)]
-							}
-						}
-						makeSameLengths(profLocs)
-						makeSameLengths(diagLocs)
-						for i := 0; i < len(profLocs); i++ {
-							fmt.Printf("%8s%s :: %s\n", tab, profLocs[i], diagLocs[i])
-						}
-						// Handle extended "explanations".
-						if explain {
-							for len(remainingRelated) > 0 {
-								fl := fileLineFromRelated(&remainingRelated[0])
-								fmt.Printf("%sexplanation :: %s:%d, %s\n", tab, fl.SourceFile, fl.Line, remainingRelated[0].Message)
-								diagnosticInlines, remainingRelated = inlinesFromRelated(remainingRelated[1:])
-								for _, fl := range diagnosticInlines {
-									fmt.Printf("%19s :: %s:%d\n", tab, fl.SourceFile, fl.Line)
-								}
+					// Print inline information, as necessary
+					for i := 0; i < len(diagLocs); i++ {
+						fmt.Printf("%16s%s\n", tab, diagLocs[i])
+					}
+
+					// Handle extended "explanations".
+					if explain {
+						for len(remainingRelated) > 0 {
+							fl := fileLineFromRelated(&remainingRelated[0])
+							fmt.Printf("%12sexplanation :: %s:%d, %s\n", tab, fl.SourceFile, fl.Line, remainingRelated[0].Message)
+							diagnosticInlines, remainingRelated = inlinesFromRelated(remainingRelated[1:])
+							for _, fl := range diagnosticInlines {
+								//
+								fmt.Printf("%18s(inline) %s:%d\n", tab, fl.SourceFile, fl.Line)
 							}
 						}
 					}
@@ -299,7 +284,7 @@ func runBench(testargs []string) (newargs []string, cleanup func()) {
 	if packages != "" {
 		packages = packages + "="
 	}
-	gcFlags := "-gcflags="+packages+"-json=0,"+lsp
+	gcFlags := "-gcflags=" + packages + "-json=0," + lsp
 
 	cmdArgs := []string{"test", gcFlags, "-cpuprofile=" + cpuprofile, "-bench=" + bench, "."}
 	cmdArgs = append(cmdArgs, testargs...)

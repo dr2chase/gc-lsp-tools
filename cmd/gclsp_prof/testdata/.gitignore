@@ -1,4 +1,8 @@
 foo.exe
 foo.prof
+foo.lspdir/
+bar.prof
+bar.lspdir/
 gclsp/
 gclsp_prof.exe
+testdata.test

@@ -69,23 +69,24 @@ func TestIt(t *testing.T) {
 
 	split := strings.Split(out, "\n")
 
-	if len(split) > 13 { // Last line is blank.
-		split = split[len(split)-13:]
-	}
 	// This can fail if the profiles are far from expected values, which might happen sometimes or on some architectures.
 	matchREs := []string{
-		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at earlier line 37[)]",
-		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
-		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at earlier [(]inline[)] line 38[)]",
-		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
-		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at later line 39[)]",
-		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:20",
-		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at earlier line 37[)]",
-		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
-		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at earlier [(]inline[)] line 38[)]",
-		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:16",
-		".*%, [$].*/foo[.]go:38 :: isInBounds [(]at later line 39[)]",
-		".*[$].*/foo[.]go:20 :: [$].*/foo[.]go:20",
+		" *[0-9]+[.][0-9]+%, [$]PWD/foo[.]go:[0-9]+[)]",
+		" *[(]inline[)] [$]PWD/foo[.]go:[0-9]+",
+		" *isInBounds [(]at line [0-9]+[)]",
+		" *[(]inline[)]  [$]PWD/foo[.]go:[0-9]+",
+		" *[0-9]+[.][0-9]+%, [$]PWD/foo[.]go:[0-9]+[)]",
+		" *[(]inline[)] [$]PWD/foo[.]go:[0-9]+",
+		" *isInBounds [(]at earlier line [0-9]+[)]",
+		" *[(]inline[)]  [$]PWD/foo[.]go:[0-9]+",
+		" *isInBounds [(]at line [0-9]+[)]",
+		" *[(]inline-earlier [)]  [$]PWD/foo[.]go:[0-9]+",
+		" *isInBounds [(]at later line [0-9]+[)]",
+		" *[(]inline[)]  [$]PWD/foo[.]go:[0-9]+",
+	}
+	expectedTailLen := len(matchREs)+1 // Last line is blank.
+	if len(split) > expectedTailLen {
+		split = split[len(split)-expectedTailLen:]
 	}
 	for i, s := range split {
 		s = strings.TrimSpace(s)
