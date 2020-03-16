@@ -22,33 +22,39 @@ gclsp_prof -bench=Bench -keep=bar
 ```
 and you should see
 ```
-( go test -gcflags=all=-json=0,$PWD/bar.lspdir -cpuprofile=$PWD/bar.prof -bench=Bench . )
+gclsp_prof -bench=Bench -keep=bar 
+( go test -gcflags=-json=0,$PWD/bar.lspdir -cpuprofile=$PWD/bar.prof -bench=Bench . )
 goos: darwin
 goarch: amd64
 pkg: github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata
-BenchmarkDo-4   	       4	 289721244 ns/op
+BenchmarkDo-4   	       1	2403061102 ns/op
 PASS
-ok  	github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata	2.617s
+ok  	github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata	2.684s
 
-  1.4%, $PWD/foo_test.go:89 :: isInBounds (at line 89)
-	$PWD/foo_test.go:15 :: $PWD/foo_test.go:15
-  1.9%, $PWD/foo_test.go:33 :: isInBounds (at line 33)
-	$PWD/foo_test.go:15 :: $PWD/foo_test.go:11
-  1.9%, $PWD/foo_test.go:89 :: isInBounds (at line 89)
-	$PWD/foo_test.go:15 :: $PWD/foo_test.go:15
-  1.9%, $HOME/work/go/src/runtime/sys_darwin.go:239 :: nilcheck (at line 239)
-	 :: $HOME/work/go/src/runtime/proc.go:417
-  2.4%, $PWD/foo_test.go:33 :: isInBounds (at line 33)
-	$PWD/foo_test.go:15 :: $PWD/foo_test.go:11
-  3.8%, $PWD/foo_test.go:89 :: isInBounds (at line 89)
-	$PWD/foo_test.go:15 :: $PWD/foo_test.go:15
-  8.0%, $PWD/foo_test.go:33 :: isInBounds (at line 33)
-	$PWD/foo_test.go:15 :: $PWD/foo_test.go:11
- 10.4%, $PWD/foo_test.go:33 :: isInBounds (at line 33)
-	$PWD/foo_test.go:15 :: $PWD/foo_test.go:11
+  1.2%, $PWD/foo_test.go:77)
+            (inline) $PWD/foo_test.go:15
+        escapes, x escapes to heap (at line 77)
+                (inline-earlier )  $PWD/foo_test.go:14
+        isInBounds (at line 77)
+                (inline)  $PWD/foo_test.go:15
+  1.6%, $PWD/foo_test.go:33)
+        escapes, x escapes to heap (at line 33)
+                (inline-nearby )  $PWD/foo_test.go:14
+        isInBounds (at line 33)
+                (inline-nearby )  $PWD/foo_test.go:15
+        isInBounds (at line 33)
+                (inline-nearby )  $PWD/foo_test.go:11
+  2.5%, $PWD/foo_test.go:33)
+            (inline) $PWD/foo_test.go:11
+        escapes, x escapes to heap (at line 33)
+                (inline)  $PWD/foo_test.go:14
+        isInBounds (at line 33)
+                (inline)  $PWD/foo_test.go:15
+        isInBounds (at line 33)
+                (inline)  $PWD/foo_test.go:11
 ```
 The two files `bar.lspdir` and `bar.prof` can be used as inputs to rerun the command, perhaps with different
-parameters, for example `gclsp_prof -t=3.0 -b=1 bar.lspdir bar.prof`
+parameters, for example `gclsp_prof -t=0.5 -b=1 bar.lspdir bar.prof`
 
 If you would like to do this to an application rather than a benchmark,
 there are additional steps.
@@ -86,25 +92,23 @@ gclsp_prof -t=5.0 $PWD/foo.lspdir foo.prof
 
 This will produce output that looks something like:
 ```
-  5.4%, $PWD/foo.go:93 :: isInBounds (at line 94)
-	 :: $PWD/foo.go:20
-  7.8%, $PWD/foo.go:94 :: isInBounds (at line 94)
-	$PWD/foo.go:20 :: $PWD/foo.go:20
- 14.9%, $PWD/foo.go:38 :: isInBounds (at earlier line 37)
-	$PWD/foo.go:20 :: $PWD/foo.go:16
- 14.9%, $PWD/foo.go:38 :: isInBounds (at line 38)
-	$PWD/foo.go:20 :: $PWD/foo.go:16
- 14.9%, $PWD/foo.go:38 :: isInBounds (at line 39)
-	$PWD/foo.go:20 :: $PWD/foo.go:20
- 16.3%, $PWD/foo.go:38 :: isInBounds (at earlier line 37)
-	$PWD/foo.go:20 :: $PWD/foo.go:16
- 16.3%, $PWD/foo.go:38 :: isInBounds (at line 38)
-	$PWD/foo.go:20 :: $PWD/foo.go:16
- 16.3%, $PWD/foo.go:38 :: isInBounds (at line 39)
-	$PWD/foo.go:20 :: $PWD/foo.go:20
+  7.4%, $PWD/foo.go:65)
+            (inline) $PWD/foo.go:20
+        isInBounds (at line 65)
+                (inline)  $PWD/foo.go:20
+        isInBounds (at line 65)
+                (inline)  $PWD/foo.go:20
+ 20.4%, $PWD/foo.go:94)
+            (inline) $PWD/foo.go:20
+        isInBounds (at line 94)
+                (inline)  $PWD/foo.go:20
+ 33.4%, $PWD/foo.go:38)
+            (inline) $PWD/foo.go:20
+        isInBounds (at line 38)
+                (inline-earlier )  $PWD/foo.go:16
 ```
 Inline locations in the list above appear on lines following a sample line,
-arranged "sample_line :: diagnostic_line".
+prefixed with `(inline)`.
 
 To generate the sample data above and also see the commands involved, in
 `github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof`,
