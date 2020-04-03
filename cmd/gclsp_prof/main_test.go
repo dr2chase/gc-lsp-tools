@@ -70,19 +70,22 @@ func TestIt(t *testing.T) {
 	split := strings.Split(out, "\n")
 
 	// This can fail if the profiles are far from expected values, which might happen sometimes or on some architectures.
+
+	// The working directory can be ID'd in several ways
+	pwdre := "[$](PWD|(GOPATH|HOME/.*)/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata)"
 	matchREs := []string{
-		" *[0-9]+[.][0-9]+%, [$]PWD/foo[.]go:[0-9]+[)]",
-		" *[(]inline[)] [$]PWD/foo[.]go:[0-9]+",
+		" *[0-9]+[.][0-9]+%, "+pwdre+"/foo[.]go:[0-9]+[)]",
+		" *[(]inline[)] "+pwdre+"/foo[.]go:[0-9]+",
 		" *isInBounds [(]at line [0-9]+[)]",
-		" *[(]inline[)]  [$]PWD/foo[.]go:[0-9]+",
-		" *[0-9]+[.][0-9]+%, [$]PWD/foo[.]go:[0-9]+[)]",
-		" *[(]inline[)] [$]PWD/foo[.]go:[0-9]+",
+		" *[(]inline[)]  "+pwdre+"/foo[.]go:[0-9]+",
+		" *[0-9]+[.][0-9]+%, "+pwdre+"/foo[.]go:[0-9]+[)]",
+		" *[(]inline[)] ["+pwdre+"/foo[.]go:[0-9]+",
 		" *isInBounds [(]at earlier line [0-9]+[)]",
-		" *[(]inline[)]  [$]PWD/foo[.]go:[0-9]+",
+		" *[(]inline[)]  "+pwdre+"/foo[.]go:[0-9]+",
 		" *isInBounds [(]at line [0-9]+[)]",
-		" *[(]inline-earlier [)]  [$]PWD/foo[.]go:[0-9]+",
+		" *[(]inline-earlier [)]  "+pwdre+"/foo[.]go:[0-9]+",
 		" *isInBounds [(]at later line [0-9]+[)]",
-		" *[(]inline[)]  [$]PWD/foo[.]go:[0-9]+",
+		" *[(]inline[)]  "+pwdre+"/foo[.]go:[0-9]+",
 	}
 	expectedTailLen := len(matchREs)+1 // Last line is blank.
 	if len(split) > expectedTailLen {

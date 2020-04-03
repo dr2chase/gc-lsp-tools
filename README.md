@@ -1,6 +1,6 @@
 # gc-lsp-tools
 
-gclsp_prof reads the Go compiler's LSP-encoded logging of places where an optimization was not quite possible,
+gclsp_prof reads the Go compiler's LSP-encoded logging of places where an optimization was not possible,
 and combines that with profiling data to see if you might be able to improve performance by tweaking your code slightly.
 The use of profiling data is to avoid overwhelming users with noise about all the not-performance-critical places
 that the optimizer left a check in or was forced to do a heap allocation, etc.
