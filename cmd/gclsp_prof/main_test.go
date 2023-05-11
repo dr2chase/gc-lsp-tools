@@ -74,20 +74,33 @@ func TestIt(t *testing.T) {
 	// The working directory can be ID'd in several ways
 	pwdre := "[$](PWD|(GOPATH|HOME/.*)/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata)"
 	matchREs := []string{
-		" *[0-9]+[.][0-9]+%, "+pwdre+"/foo[.]go:[0-9]+[)]",
-		" *[(]inline[)] "+pwdre+"/foo[.]go:[0-9]+",
-		" *isInBounds [(]at line [0-9]+[)]",
-		" *[(]inline[)]  "+pwdre+"/foo[.]go:[0-9]+",
-		" *[0-9]+[.][0-9]+%, "+pwdre+"/foo[.]go:[0-9]+[)]",
-		" *[(]inline[)] ["+pwdre+"/foo[.]go:[0-9]+",
-		" *isInBounds [(]at earlier line [0-9]+[)]",
-		" *[(]inline[)]  "+pwdre+"/foo[.]go:[0-9]+",
-		" *isInBounds [(]at line [0-9]+[)]",
-		" *[(]inline-earlier [)]  "+pwdre+"/foo[.]go:[0-9]+",
+		" *[0-9]+[.][0-9]+%, " + pwdre + "/foo[.]go:[0-9]+[)]",
 		" *isInBounds [(]at later line [0-9]+[)]",
-		" *[(]inline[)]  "+pwdre+"/foo[.]go:[0-9]+",
+		" *[(]inline[)] " + pwdre + "/foo[.]go:[0-9]+",
+		" *[0-9]+[.][0-9]+%, " + pwdre + "/foo[.]go:[0-9]+[)]",
+		" *isInBounds [(]at earlier line [0-9]+[)]",
+		" *[(]inline[)] " + pwdre + "/foo[.]go:[0-9]+",
+		" *isInBounds [(]at line [0-9]+[)]",
+		" *[(]inline-nearby[)] " + pwdre + "/foo[.]go:[0-9]+",
+		" *isInBounds [(]at later line [0-9]+[)]",
+		" *[(]inline[)] " + pwdre + "/foo[.]go:[0-9]+",
 	}
-	expectedTailLen := len(matchREs)+1 // Last line is blank.
+
+	/*
+	   main_test.go:68:
+	        14.5%, $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:93)
+	               isInBounds (at later line 94)
+	                       (inline)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:20
+	        35.7%, $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:38)
+	               isInBounds (at earlier line 37)
+	                       (inline)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:16
+	               isInBounds (at line 38)
+	                       (inline-nearby)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:16
+	               isInBounds (at later line 39)
+	                       (inline)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:20
+	*/
+
+	expectedTailLen := len(matchREs) + 1 // Last line is blank.
 	if len(split) > expectedTailLen {
 		split = split[len(split)-expectedTailLen:]
 	}

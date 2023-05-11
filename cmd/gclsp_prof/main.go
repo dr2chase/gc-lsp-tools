@@ -124,8 +124,9 @@ information in LspDir to match missed optimizations against hotspots.
 	}
 
 	near := func(d *lsp.Diagnostic, line int64) bool {
-		diag := int64(d.Range.Start.Line)
-		return line-before <= diag && diag <= line+after
+		diagStart := int64(d.Range.Start.Line)
+		diagEnd := int64(d.Range.End.Line)
+		return line-before <= diagStart && diagEnd <= line+after
 	}
 
 	tab := "        " // Tabs vary, we want 8.
@@ -160,7 +161,7 @@ information in LspDir to match missed optimizations against hotspots.
 					}
 
 					nearby := ""
-					if int64(d.Range.Start.Line) < p.FileLine[0].Line {
+					if int64(d.Range.End.Line) < p.FileLine[0].Line {
 						nearby = "earlier "
 					}
 					if int64(d.Range.Start.Line) > p.FileLine[0].Line {
@@ -184,26 +185,26 @@ information in LspDir to match missed optimizations against hotspots.
 						if inlineNearby == "" && nearby == "" {
 							if i < len(profileInlines) && j < len(diagnosticInlines) {
 								if diagnosticInlines[j].SourceFile != profileInlines[i].SourceFile {
-									inlineNearby = "-nearby " // different files
+									inlineNearby = "-nearby" // different files
 								} else if diagnosticInlines[j].Line < profileInlines[i].Line {
-									inlineNearby = "-earlier "
+									inlineNearby = "-earlier"
 								} else if diagnosticInlines[j].Line < profileInlines[i].Line {
-									inlineNearby = "-later "
+									inlineNearby = "-later"
 								} else {
 									// still the same
 								}
 							} else {
-								inlineNearby = "-nearby " // mismatched depths
+								inlineNearby = "-nearby" // mismatched depths
 							}
 						}
 
 						if j < len(diagnosticInlines) {
 							il := diagnosticInlines[j]
-							diagLocs = append(diagLocs, fmt.Sprintf("(inline%s)  %s:%d", inlineNearby, il.SourceFile, il.Line))
+							diagLocs = append(diagLocs, fmt.Sprintf("(inline%s) %s:%d", inlineNearby, il.SourceFile, il.Line))
 							nearby = "not empty" // prevent repeats
 							inlineNearby = ""
 						} else {
-							break; // Exit after noticing that the depths are mismatched
+							break // Exit after noticing that the depths are mismatched
 						}
 					}
 
