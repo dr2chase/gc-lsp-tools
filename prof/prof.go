@@ -56,7 +56,7 @@ func FileToSortedProfile(f *os.File) (*profile.Profile, int, float64) {
 
 type flsMap map[FileLine]struct {
 	index int
-	il *flsMap
+	il    *flsMap
 }
 
 func (m *flsMap) put(s []FileLine, index int) {
@@ -124,6 +124,9 @@ func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
 	var pi []*ProfileItem
 
 	for _, s := range p.Sample {
+		if len(s.Location) == 0 {
+			continue
+		}
 		c := float64(s.Value[countIndex]) / countTotal
 		lines := s.Location[0].Line
 		l := len(lines)
@@ -138,7 +141,7 @@ func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
 		if combine {
 			i, ok := flsmap.get(fileLines)
 			if ok {
-				pi[i].FlatPercent += 100*c
+				pi[i].FlatPercent += 100 * c
 				continue
 			}
 			flsmap.put(fileLines, len(pi))
@@ -151,7 +154,7 @@ func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
 	}
 
 	if combine {
-		sort.Slice(pi, func(i,j int) bool { return pi[i].FlatPercent < pi[j].FlatPercent})
+		sort.Slice(pi, func(i, j int) bool { return pi[i].FlatPercent < pi[j].FlatPercent })
 	}
 	return pi, nil
 }

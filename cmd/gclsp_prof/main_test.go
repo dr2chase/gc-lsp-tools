@@ -32,9 +32,8 @@ var (
 	here = flag.Bool("here", false, "run the test in this directory")
 )
 
-func TestIt(t *testing.T) {
-	// Set up test directory.
-	testdir := path.Join(cwd, "testdata")
+func runThing(t *testing.T, thing string) (split []string, doafter func()) {
+	testdir := path.Join(cwd, "testdata", thing)
 	if !*here {
 		var err error
 		testdir, err = ioutil.TempDir("", "GcLspProfTest")
@@ -42,17 +41,19 @@ func TestIt(t *testing.T) {
 			panic(err)
 		}
 		if !*keep {
-			defer os.RemoveAll(testdir) // clean up
+			doafter = func() { os.RemoveAll(testdir) } // clean up
 		}
 	}
 
-	// Important files
-	binary := path.Join(testdir, "foo.exe")
-	gclsp_prof := path.Join(testdir, "gclsp_prof.exe")
-	lspdir := path.Join(testdir, "foo.lspdir")
+	t.Logf("%s", string(runCmd(exec.Command("go", "version"), t)))
 
-	cmd := exec.Command("go", "build", "-o", binary, "-gcflags=-json=0,"+lspdir, "testdata/foo.go")
-	_ = runCmd(cmd, t)
+	// Important files
+	binary := path.Join(testdir, thing+".exe")
+	gclsp_prof := path.Join(testdir, "gclsp_prof.exe")
+	lspdir := path.Join(testdir, thing+".lspdir")
+
+	cmd := exec.Command("go", "build", "-o", binary, "-a", "-gcflags=-d=loopvar=2 -json=0,"+lspdir, "testdata/"+thing+"/"+thing+".go")
+	t.Logf("%s", string(runCmd(cmd, t)))
 
 	cmd = exec.Command("go", "build", "-o", gclsp_prof, ".")
 	_ = runCmd(cmd, t)
@@ -61,18 +62,42 @@ func TestIt(t *testing.T) {
 	cmd.Dir = testdir
 	_ = runCmd(cmd, t)
 
-	cmd = exec.Command(gclsp_prof, "-a=1", "-b=1", "-t=12.0", "./foo.lspdir", "foo.prof")
+	cmd = exec.Command(gclsp_prof, "-a=1", "-b=1", "-t=12.0", "./"+thing+".lspdir", thing+".prof")
 	cmd.Dir = testdir
 	cmd.Env = replaceEnv(os.Environ(), "PWD", testdir)
 	out := string(runCmd(cmd, t))
 	t.Logf("\n%s", out)
 
-	split := strings.Split(out, "\n")
+	split = strings.Split(out, "\n")
+
+	return
+}
+
+func TestBar(t *testing.T) {
+	split, doafter := runThing(t, "bar")
+	if doafter != nil {
+		defer doafter()
+	}
+	for _, s := range split {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		t.Logf("%s", s)
+	}
+}
+
+func TestFoo(t *testing.T) {
+
+	split, doafter := runThing(t, "foo")
+	if doafter != nil {
+		defer doafter()
+	}
 
 	// This can fail if the profiles are far from expected values, which might happen sometimes or on some architectures.
 
 	// The working directory can be ID'd in several ways
-	pwdre := "[$](PWD|(GOPATH|HOME/.*)/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata)"
+	pwdre := "[$](PWD|(GOPATH|HOME/.*)/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo)"
 	matchREs := []string{
 		" *[0-9]+[.][0-9]+%, " + pwdre + "/foo[.]go:[0-9]+[)]",
 		" *isInBounds [(]at later line [0-9]+[)]",
@@ -85,20 +110,6 @@ func TestIt(t *testing.T) {
 		" *isInBounds [(]at later line [0-9]+[)]",
 		" *[(]inline[)] " + pwdre + "/foo[.]go:[0-9]+",
 	}
-
-	/*
-	   main_test.go:68:
-	        14.5%, $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:93)
-	               isInBounds (at later line 94)
-	                       (inline)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:20
-	        35.7%, $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:38)
-	               isInBounds (at earlier line 37)
-	                       (inline)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:16
-	               isInBounds (at line 38)
-	                       (inline-nearby)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:16
-	               isInBounds (at later line 39)
-	                       (inline)  $GOPATH/src/github.com/dr2chase/gc-lsp-tools/cmd/gclsp_prof/testdata/foo.go:20
-	*/
 
 	expectedTailLen := len(matchREs) + 1 // Last line is blank.
 	if len(split) > expectedTailLen {

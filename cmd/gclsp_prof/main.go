@@ -186,10 +186,10 @@ information in LspDir to match missed optimizations against hotspots.
 							if i < len(profileInlines) && j < len(diagnosticInlines) {
 								if diagnosticInlines[j].SourceFile != profileInlines[i].SourceFile {
 									inlineNearby = "-nearby" // different files
-								} else if diagnosticInlines[j].Line < profileInlines[i].Line {
-									inlineNearby = "-earlier"
-								} else if diagnosticInlines[j].Line < profileInlines[i].Line {
+								} else if diagnosticInlines[j].LineStart > profileInlines[i].Line {
 									inlineNearby = "-later"
+								} else if diagnosticInlines[j].LineEnd < profileInlines[i].Line {
+									inlineNearby = "-earlier"
 								} else {
 									// still the same
 								}
@@ -200,7 +200,12 @@ information in LspDir to match missed optimizations against hotspots.
 
 						if j < len(diagnosticInlines) {
 							il := diagnosticInlines[j]
-							diagLocs = append(diagLocs, fmt.Sprintf("(inline%s) %s:%d", inlineNearby, il.SourceFile, il.Line))
+							if il.LineStart == il.LineEnd {
+								diagLocs = append(diagLocs, fmt.Sprintf("(inline%s) %s:%d", inlineNearby, il.SourceFile, il.LineStart))
+							} else {
+								diagLocs = append(diagLocs, fmt.Sprintf("(inline%s) %s:%d-%d", inlineNearby, il.SourceFile, il.LineStart, il.LineEnd))
+
+							}
 							nearby = "not empty" // prevent repeats
 							inlineNearby = ""
 						} else {
@@ -215,13 +220,14 @@ information in LspDir to match missed optimizations against hotspots.
 
 					// Handle extended "explanations".
 					if explain {
+						// TODO if explanations ever span multiple lines, change this (LineStart -> LineStart...LineEnd)
 						for len(remainingRelated) > 0 {
 							fl := fileLineFromRelated(&remainingRelated[0])
-							fmt.Printf("%12sexplanation :: %s:%d, %s\n", tab, fl.SourceFile, fl.Line, remainingRelated[0].Message)
+							fmt.Printf("%12sexplanation :: %s:%d, %s\n", tab, fl.SourceFile, fl.LineStart, remainingRelated[0].Message)
 							diagnosticInlines, remainingRelated = inlinesFromRelated(remainingRelated[1:])
 							for _, fl := range diagnosticInlines {
 								//
-								fmt.Printf("%18s(inline) %s:%d\n", tab, fl.SourceFile, fl.Line)
+								fmt.Printf("%18s(inline) %s:%d\n", tab, fl.SourceFile, fl.LineStart)
 							}
 						}
 					}
@@ -231,9 +237,14 @@ information in LspDir to match missed optimizations against hotspots.
 	}
 }
 
+type FileLineRange struct {
+	SourceFile         string
+	LineStart, LineEnd int64
+}
+
 // fileLineFromRelated returns the normalized file and line number from the
 // Location of its DiagnosticRelatedInformation argument.
-func fileLineFromRelated(ri *lsp.DiagnosticRelatedInformation) prof.FileLine {
+func fileLineFromRelated(ri *lsp.DiagnosticRelatedInformation) FileLineRange {
 	uri := string(ri.Location.URI)
 	if strings.HasPrefix(uri, "file://") {
 		s, err := url.PathUnescape(uri[7:])
@@ -242,16 +253,17 @@ func fileLineFromRelated(ri *lsp.DiagnosticRelatedInformation) prof.FileLine {
 		}
 		uri = s
 	}
-	return prof.FileLine{
+	return FileLineRange{
 		SourceFile: shorten(uri),
-		Line:       int64(ri.Location.Range.Start.Line),
+		LineStart:  int64(ri.Location.Range.Start.Line),
+		LineEnd:    int64(ri.Location.Range.End.Line),
 	}
 }
 
 // inlinesFromRelated extracts any inline locations from a slice of DiagnosticRelatedInformation
 // and returns the file+line for the inlines and the remaining subslice of DiagnosticRelatedInformation.
-func inlinesFromRelated(relatedInformation []lsp.DiagnosticRelatedInformation) ([]prof.FileLine, []lsp.DiagnosticRelatedInformation) {
-	var diagnosticInlines []prof.FileLine
+func inlinesFromRelated(relatedInformation []lsp.DiagnosticRelatedInformation) ([]FileLineRange, []lsp.DiagnosticRelatedInformation) {
+	var diagnosticInlines []FileLineRange
 	for i, ri := range relatedInformation {
 		if ri.Message != "inlineLoc" {
 			return diagnosticInlines, relatedInformation[i:]
