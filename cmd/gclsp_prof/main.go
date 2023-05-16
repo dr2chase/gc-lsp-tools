@@ -18,6 +18,8 @@ import (
 
 	"github.com/dr2chase/gc-lsp-tools/lsp"
 	"github.com/dr2chase/gc-lsp-tools/prof"
+
+	"github.com/rdleal/intervalst/interval"
 )
 
 var pwd string = os.Getenv("PWD")
@@ -34,25 +36,29 @@ var bench string
 var keep string
 var packages string
 
-// gclsp_prof [-v] [-a=n] [-b=n] [-t=f.f] [-s] [-cpuprofile=file]  lspdir profile1 [ profile2 ... ]
+var verbose = false
+var before = int64(0)
+var after = int64(0)
+var explain = false
+var cpuprofile = ""
+var threshold = 1.0
+var filter = ""
+var filterRE *regexp.Regexp
+
+// gclsp_prof [-v] [-e] [-a=n] [-b=n] [-f=RE] [-t=f.f] [-s=EVs] [-cpuprofile=file]  lspdir profile1 [ profile2 ... ]
 // Produces a summary of optimizations (if any) that were not or could not be applied at hotspots in the profile.
 func main() {
-	verbose := false
-	before := int64(0)
-	after := int64(0)
-	explain := false
-	cpuprofile := ""
-	threshold := 1.0
-	filter := ""
 
 	flag.BoolVar(&verbose, "v", verbose, "Spews information about profiles read and lsp files")
 	flag.BoolVar(&explain, "e", explain, "Also supply \"explanations\"")
-	flag.Int64Var(&before, "b", before, "Include log entries this many lines before a profile hot spot")
 	flag.Int64Var(&after, "a", after, "Include log entries this many lines after a profile hot spot")
-	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
+	flag.Int64Var(&before, "b", before, "Include log entries this many lines before a profile hot spot")
+
+	flag.StringVar(&filter, "f", filter, "Reported tags should match filter")
 	flag.Float64Var(&threshold, "t", threshold, "Threshold percentage below which profile entries will be ignored")
 	flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
-	flag.StringVar(&filter, "f", filter, "Reported tags should match filter")
+
+	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
 	flag.StringVar(&bench, "bench", bench, "Run 'bench' benchmarks in current directory and reports hotspot(s). Passes -bench=whatever to go test, as well as arguments past --")
 	flag.StringVar(&keep, "keep", keep, "For -bench, keep the intermedia results in <-keep>.lspdir and <-keep>.prof")
 	flag.StringVar(&packages, "packages", packages, "For -bench, get diagnostics for the listed packages (see 'go help packages')")
@@ -71,8 +77,6 @@ information in LspDir to match missed optimizations against hotspots.
 	flag.Usage = usage
 
 	flag.Parse()
-
-	var filterRE *regexp.Regexp
 
 	if filter != "" {
 		filterRE = regexp.MustCompile(filter)
@@ -133,6 +137,11 @@ information in LspDir to match missed optimizations against hotspots.
 		panic(err)
 	}
 
+	reportPlain(pi, byFile)
+
+}
+
+func reportPlain(pi []*prof.ProfileItem, byFile map[string]*lsp.CompilerDiagnostics) {
 	near := func(d *lsp.Diagnostic, line int64) bool {
 		diagStart := int64(d.Range.Start.Line)
 		diagEnd := int64(d.Range.End.Line)
@@ -250,6 +259,18 @@ information in LspDir to match missed optimizations against hotspots.
 			}
 		}
 	}
+}
+
+type taggedDiagnostic struct {
+	// note that the source file is implicit in an lsp CompilerDiagnostic
+	sourceFile string
+	diagnostic *lsp.CompilerDiagnostics
+}
+
+type grouped struct {
+	FlatPercent float64
+	samples     []prof.ProfileItem
+	diagnostics []taggedDiagnostic
 }
 
 type FileLineRange struct {
