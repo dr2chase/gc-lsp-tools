@@ -7,15 +7,17 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/dr2chase/gc-lsp-tools/lsp"
-	"github.com/dr2chase/gc-lsp-tools/prof"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime/pprof"
 	"strings"
+
+	"github.com/dr2chase/gc-lsp-tools/lsp"
+	"github.com/dr2chase/gc-lsp-tools/prof"
 )
 
 var pwd string = os.Getenv("PWD")
@@ -41,6 +43,7 @@ func main() {
 	explain := false
 	cpuprofile := ""
 	threshold := 1.0
+	filter := ""
 
 	flag.BoolVar(&verbose, "v", verbose, "Spews information about profiles read and lsp files")
 	flag.BoolVar(&explain, "e", explain, "Also supply \"explanations\"")
@@ -49,6 +52,7 @@ func main() {
 	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
 	flag.Float64Var(&threshold, "t", threshold, "Threshold percentage below which profile entries will be ignored")
 	flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
+	flag.StringVar(&filter, "f", filter, "Reported tags should match filter")
 	flag.StringVar(&bench, "bench", bench, "Run 'bench' benchmarks in current directory and reports hotspot(s). Passes -bench=whatever to go test, as well as arguments past --")
 	flag.StringVar(&keep, "keep", keep, "For -bench, keep the intermedia results in <-keep>.lspdir and <-keep>.prof")
 	flag.StringVar(&packages, "packages", packages, "For -bench, get diagnostics for the listed packages (see 'go help packages')")
@@ -67,6 +71,12 @@ information in LspDir to match missed optimizations against hotspots.
 	flag.Usage = usage
 
 	flag.Parse()
+
+	var filterRE *regexp.Regexp
+
+	if filter != "" {
+		filterRE = regexp.MustCompile(filter)
+	}
 
 	if cpuprofile != "" {
 		file, _ := os.Create(cpuprofile)
@@ -147,6 +157,11 @@ information in LspDir to match missed optimizations against hotspots.
 					if d.Code == "inlineCall" { // Don't want to see these, they are confusing and eventually removed..
 						continue
 					}
+
+					if filterRE != nil && !filterRE.MatchString(d.Code) {
+						continue
+					}
+
 					if !near(d, fl.Line) {
 						continue
 					}
