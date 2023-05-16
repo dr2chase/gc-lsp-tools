@@ -128,7 +128,7 @@ information in LspDir to match missed optimizations against hotspots.
 	}
 
 	byFile := make(map[string]*lsp.CompilerDiagnostics)
-	err = lsp.ReadAll(lspDir, &byFile, verbose)
+	err = lsp.ReadAll(lspDir, byFile, verbose)
 	if err != nil {
 		panic(err)
 	}

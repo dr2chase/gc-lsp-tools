@@ -198,7 +198,7 @@ func ReadPackage(dir string) (cds []*CompilerDiagnostics, err error) {
 // a package, and populates a map from (outermost) source file to compiler diagnostics
 // for that file.
 // Indexing is by outermost file for a diagnostic's position.
-func ReadAll(dir string, byFile *map[string]*CompilerDiagnostics, verbose bool) error {
+func ReadAll(dir string, byFile map[string]*CompilerDiagnostics, verbose bool) error {
 	first := true
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -216,7 +216,7 @@ func ReadAll(dir string, byFile *map[string]*CompilerDiagnostics, verbose bool) 
 		}
 		cds, err := ReadPackage(path)
 		for _, cd := range cds {
-			(*byFile)[cd.Header.File] = cd
+			byFile[cd.Header.File] = cd
 		}
 		return filepath.SkipDir
 	})

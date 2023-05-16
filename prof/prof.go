@@ -56,26 +56,26 @@ func FileToSortedProfile(f *os.File) (*profile.Profile, int, float64) {
 
 type flsMap map[FileLine]struct {
 	index int
-	il    *flsMap
+	il    flsMap
 }
 
-func (m *flsMap) put(s []FileLine, index int) {
-	x := (*m)[s[0]]
+func (m flsMap) put(s []FileLine, index int) {
+	x := m[s[0]]
 	if len(s) == 1 {
 		x.index = index
-		(*m)[s[0]] = x
+		m[s[0]] = x
 		return
 	}
 	if x.il == nil {
 		t := make(flsMap)
-		x.il = &t
+		x.il = t
 	}
 	x.il.put(s[1:], index)
-	(*m)[s[0]] = x
+	m[s[0]] = x
 }
 
-func (m *flsMap) get(s []FileLine) (index int, ok bool) {
-	x, xok := (*m)[s[0]]
+func (m flsMap) get(s []FileLine) (index int, ok bool) {
+	x, xok := m[s[0]]
 	if !xok {
 		return -1, false
 	}
