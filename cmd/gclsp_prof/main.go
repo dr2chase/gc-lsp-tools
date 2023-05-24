@@ -18,8 +18,7 @@ import (
 
 	"github.com/dr2chase/gc-lsp-tools/lsp"
 	"github.com/dr2chase/gc-lsp-tools/prof"
-
-	"github.com/rdleal/intervalst/interval"
+	// "github.com/rdleal/intervalst/interval"
 )
 
 var pwd string = os.Getenv("PWD")

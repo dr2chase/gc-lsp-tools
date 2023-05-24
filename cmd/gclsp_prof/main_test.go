@@ -52,7 +52,7 @@ func runThing(t *testing.T, thing string) (split []string, doafter func()) {
 	gclsp_prof := path.Join(testdir, "gclsp_prof.exe")
 	lspdir := path.Join(testdir, thing+".lspdir")
 
-	cmd := exec.Command("go", "build", "-o", binary, "-a", "-gcflags=-d=loopvar=2 -json=0,"+lspdir, "testdata/"+thing+"/"+thing+".go")
+	cmd := exec.Command("go", "build", "-o", binary, "-a", "-gcflags=-d=loopvar=3 -json=0,"+lspdir, "testdata/"+thing+"/"+thing+".go")
 	t.Logf("%s", string(runCmd(cmd, t)))
 
 	cmd = exec.Command("go", "build", "-o", gclsp_prof, ".")
@@ -62,7 +62,7 @@ func runThing(t *testing.T, thing string) (split []string, doafter func()) {
 	cmd.Dir = testdir
 	_ = runCmd(cmd, t)
 
-	cmd = exec.Command(gclsp_prof, "-a=1", "-b=1", "-t=12.0", "./"+thing+".lspdir", thing+".prof")
+	cmd = exec.Command(gclsp_prof, "-a=1", "-b=1", "-t=10.0", "./"+thing+".lspdir", thing+".prof")
 	cmd.Dir = testdir
 	cmd.Env = replaceEnv(os.Environ(), "PWD", testdir)
 	out := string(runCmd(cmd, t))
