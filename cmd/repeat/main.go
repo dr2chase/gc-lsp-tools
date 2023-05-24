@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -82,9 +83,22 @@ func main() {
 
 	for i := int64(1); i <= countLimit && !done(); i++ {
 		cmd := exec.Command(rest[0], rest[1:]...)
+		if verbose {
+			fmt.Printf("%d: %s", i, rest[0])
+			for _, s := range rest[1:] {
+				fmt.Printf(" %s", s)
+			}
+			fmt.Println()
+		}
 		output, err := cmd.CombinedOutput()
 		if verbose {
-			fmt.Fprintf(os.Stdout, "%s\n", string(output))
+			s := string(output)
+			if s != "" {
+				fmt.Printf("%s", s)
+				if !strings.HasSuffix(s, "\n") {
+					fmt.Println()
+				}
+			}
 		}
 		if err != nil {
 			os.Exit(1)
