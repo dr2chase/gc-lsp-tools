@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 
 	"github.com/dr2chase/gc-lsp-tools/lsp"
@@ -35,7 +36,7 @@ var bench string
 var keep string
 var packages string
 
-var verbose = false
+var verbose count
 var before = int64(0)
 var after = int64(0)
 var explain = false
@@ -44,11 +45,48 @@ var threshold = 1.0
 var filter = ""
 var filterRE *regexp.Regexp
 
+// count is a flag.Value that is like a flag.Bool and a flag.Int.
+// If used as -name, it increments the count, but -name=x sets the count.
+// Used for verbose flag -v.
+type count int
+
+func (c *count) String() string {
+	return fmt.Sprint(int(*c))
+}
+
+func (c *count) Set(s string) error {
+	switch s {
+	case "true":
+		*c++
+	case "false":
+		*c = 0
+	default:
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return fmt.Errorf("invalid count %q", s)
+		}
+		*c = count(n)
+	}
+	return nil
+}
+
+func (c *count) Get() interface{} {
+	return int(*c)
+}
+
+func (c *count) IsBoolFlag() bool {
+	return true
+}
+
+func (c *count) IsCountFlag() bool {
+	return true
+}
+
 // gclsp_prof [-v] [-e] [-a=n] [-b=n] [-f=RE] [-t=f.f] [-s=EVs] [-cpuprofile=file]  lspdir profile1 [ profile2 ... ]
 // Produces a summary of optimizations (if any) that were not or could not be applied at hotspots in the profile.
 func main() {
 
-	flag.BoolVar(&verbose, "v", verbose, "Spews information about profiles read and lsp files")
+	flag.Var(&verbose, "v", "Spews information about profiles read and lsp files")
 	flag.BoolVar(&explain, "e", explain, "Also supply \"explanations\"")
 	flag.Int64Var(&after, "a", after, "Include log entries this many lines after a profile hot spot")
 	flag.Int64Var(&before, "b", before, "Include log entries this many lines before a profile hot spot")
@@ -116,13 +154,13 @@ information in LspDir to match missed optimizations against hotspots.
 	profiles := args[1:]
 
 	// pi, err := prof.FromTextOutput(profiles)
-	pi, err := prof.FromProtoBuf(profiles, true)
+	pi, err := prof.FromProtoBuf(profiles, true, false)
 
 	if len(pi) == 0 {
 		return
 	}
 
-	if verbose {
+	if verbose > 0 {
 		for _, p := range pi {
 			if p.FlatPercent >= threshold {
 				fmt.Printf("%f%%, %s:%d\n", p.FlatPercent, p.FileLine[0].SourceFile, p.FileLine[0].Line)
@@ -131,7 +169,7 @@ information in LspDir to match missed optimizations against hotspots.
 	}
 
 	byFile := make(map[string]*lsp.CompilerDiagnostics)
-	err = lsp.ReadAll(lspDir, byFile, verbose)
+	err = lsp.ReadAll(lspDir, byFile, int(verbose))
 	if err != nil {
 		panic(err)
 	}

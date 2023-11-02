@@ -144,17 +144,23 @@ type CompilerDiagnostics struct {
 
 // ReadFile converts the json-encoded contents of a file (reader)
 // into a version header and diagnostics.
-func ReadFile(r io.Reader) (cd *CompilerDiagnostics, err error) {
+func ReadFile(r io.Reader, verbose int) (cd *CompilerDiagnostics, err error) {
 	dec := json.NewDecoder(r)
 	vh := new(VersionHeader)
 	err = dec.Decode(vh)
 	if err != nil {
 		return
 	}
+	if verbose > 1 {
+		fmt.Fprintf(os.Stderr, "\t\tSource file %s\n", vh.File)
+	}
 	cd = &CompilerDiagnostics{Header: vh}
 	d := new(Diagnostic)
 	for err = dec.Decode(d); err == nil; err = dec.Decode(d) {
 		cd.Diagnostics = append(cd.Diagnostics, d)
+		if verbose > 2 {
+			fmt.Fprintf(os.Stderr, "\t\t\t%s:%d %s\n", vh.File, d.Range.Start.Line, d.Code)
+		}
 		d = new(Diagnostic)
 	}
 	if err == io.EOF {
@@ -167,7 +173,7 @@ func ReadFile(r io.Reader) (cd *CompilerDiagnostics, err error) {
 // corresponds to a compiler/optimization information for a single package,
 // and converts them to their various CompilerDiagnostics.  The contents
 // are self-identifying.
-func ReadPackage(dir string) (cds []*CompilerDiagnostics, err error) {
+func ReadPackage(dir string, verbose int) (cds []*CompilerDiagnostics, err error) {
 	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -183,7 +189,10 @@ func ReadPackage(dir string) (cds []*CompilerDiagnostics, err error) {
 			}
 			defer f.Close()
 			var cd *CompilerDiagnostics
-			cd, err = ReadFile(f)
+			if verbose > 1 {
+				fmt.Fprintf(os.Stderr, "\tReading file %s\n", path)
+			}
+			cd, err = ReadFile(f, verbose)
 			if err != nil {
 				return err
 			}
@@ -198,7 +207,7 @@ func ReadPackage(dir string) (cds []*CompilerDiagnostics, err error) {
 // a package, and populates a map from (outermost) source file to compiler diagnostics
 // for that file.
 // Indexing is by outermost file for a diagnostic's position.
-func ReadAll(dir string, byFile map[string]*CompilerDiagnostics, verbose bool) error {
+func ReadAll(dir string, byFile map[string]*CompilerDiagnostics, verbose int) error {
 	first := true
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -211,12 +220,19 @@ func ReadAll(dir string, byFile map[string]*CompilerDiagnostics, verbose bool) e
 			first = false
 			return err
 		}
-		if verbose {
-			fmt.Printf("Reading package directory %s\n", path)
+		if verbose > 0 {
+			fmt.Fprintf(os.Stderr, "Reading package directory %s\n", path)
 		}
-		cds, err := ReadPackage(path)
+		cds, err := ReadPackage(path, verbose)
 		for _, cd := range cds {
-			byFile[cd.Header.File] = cd
+			if old, ok := byFile[cd.Header.File]; ok {
+				old.Diagnostics = append(old.Diagnostics, cd.Diagnostics...)
+				if verbose > 1 {
+					fmt.Fprintf(os.Stderr, "Appending %s from %s to data for %s\n", cd.Header.File, cd.Header.Package, old.Header.Package)
+				}
+			} else {
+				byFile[cd.Header.File] = cd
+			}
 		}
 		return filepath.SkipDir
 	})

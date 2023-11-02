@@ -22,6 +22,7 @@ type FileLine struct {
 // of the total and the outermost-first slice of file-and-line positions.
 type ProfileItem struct {
 	FlatPercent float64
+	FlatTotal   float64
 	FileLine    []FileLine
 }
 
@@ -37,7 +38,8 @@ func FileToSortedProfile(f *os.File) (*profile.Profile, int, float64) {
 
 	countIndex := -1
 	for i, t := range p1.SampleType {
-		if t.Type == "samples" {
+		fmt.Fprintf(os.Stderr, "Sample type %d=%s\n", i, t.Type)
+		if t.Type == "samples" || t.Type == "alloc_space" {
 			countIndex = i
 			break
 		}
@@ -93,7 +95,7 @@ func (m flsMap) get(s []FileLine) (index int, ok bool) {
 // the (-flat, -lines) protobuf output, and then processes that protobuf
 // to yield a sorted profile of sample percentages and sample locations.
 // If combine is true, samples with equal file(s) and line(s) are merged.
-func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
+func FromProtoBuf(profiles []string, combine, innermost bool) ([]*ProfileItem, error) {
 	tempFile, err := ioutil.TempFile("", "profile.*.pb.gz")
 	if err != nil {
 		panic(err)
@@ -127,20 +129,33 @@ func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
 		if len(s.Location) == 0 {
 			continue
 		}
-		c := float64(s.Value[countIndex]) / countTotal
+		val := float64(s.Value[countIndex])
+		c := val / countTotal
 		lines := s.Location[0].Line
 		l := len(lines)
-		fileLines := make([]FileLine, l, l)
-		for i, line := range lines {
-			fileLines[l-i-1] = FileLine{
-				SourceFile: line.Function.Filename,
-				Line:       line.Line,
+		var fileLines []FileLine
+		if innermost {
+			fileLines = []FileLine{{
+				SourceFile: lines[0].Function.Filename,
+				Line:       lines[0].Line,
+			}}
+		} else {
+			fileLines = make([]FileLine, l, l)
+			for i, line := range lines {
+				fileLines[l-i-1] = FileLine{
+					SourceFile: line.Function.Filename,
+					Line:       line.Line,
+				}
 			}
 		}
 
 		if combine {
 			i, ok := flsmap.get(fileLines)
+			// if fileLines[len(fileLines)-1].SourceFile == "/Users/drchase/work/go/src/cmd/internal/obj/data.go" {
+			// 	fmt.Fprintf(os.Stderr, "fl[0]=%v, len(fl)=%v, i=%v, ok=%v, len(pi)=%v\n", fileLines[0].SourceFile, len(fileLines), i, ok, len(pi))
+			// }
 			if ok {
+				pi[i].FlatTotal += val
 				pi[i].FlatPercent += 100 * c
 				continue
 			}
@@ -149,6 +164,7 @@ func FromProtoBuf(profiles []string, combine bool) ([]*ProfileItem, error) {
 
 		pi = append(pi, &ProfileItem{
 			FlatPercent: 100 * c,
+			FlatTotal:   val,
 			FileLine:    fileLines,
 		})
 	}
