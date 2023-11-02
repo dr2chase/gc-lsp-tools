@@ -30,7 +30,7 @@ type ProfileItem struct {
 // protobuf form of pprof data, and returns the profile.Profile
 // contained with, plus the Sample[*].Value index of the sample
 // count and the sum of those counts.
-func FileToSortedProfile(f *os.File) (*profile.Profile, int, float64) {
+func FileToSortedProfile(f *os.File, verbose int) (*profile.Profile, int, float64) {
 	p1, err := profile.Parse(f)
 	if err != nil {
 		panic(err)
@@ -38,7 +38,9 @@ func FileToSortedProfile(f *os.File) (*profile.Profile, int, float64) {
 
 	countIndex := -1
 	for i, t := range p1.SampleType {
-		fmt.Fprintf(os.Stderr, "Sample type %d=%s\n", i, t.Type)
+		if verbose > 1 {
+			fmt.Fprintf(os.Stderr, "Sample type %d=%s\n", i, t.Type)
+		}
 		if t.Type == "samples" || t.Type == "alloc_space" {
 			countIndex = i
 			break
@@ -95,7 +97,7 @@ func (m flsMap) get(s []FileLine) (index int, ok bool) {
 // the (-flat, -lines) protobuf output, and then processes that protobuf
 // to yield a sorted profile of sample percentages and sample locations.
 // If combine is true, samples with equal file(s) and line(s) are merged.
-func FromProtoBuf(profiles []string, combine, innermost bool) ([]*ProfileItem, error) {
+func FromProtoBuf(profiles []string, combine, innermost bool, verbose int) ([]*ProfileItem, error) {
 	tempFile, err := ioutil.TempFile("", "profile.*.pb.gz")
 	if err != nil {
 		panic(err)
@@ -119,7 +121,7 @@ func FromProtoBuf(profiles []string, combine, innermost bool) ([]*ProfileItem, e
 		return nil, nil
 	}
 
-	p, countIndex, countTotal := FileToSortedProfile(tempFile)
+	p, countIndex, countTotal := FileToSortedProfile(tempFile, verbose)
 
 	flsmap := make(flsMap)
 
@@ -133,6 +135,9 @@ func FromProtoBuf(profiles []string, combine, innermost bool) ([]*ProfileItem, e
 		c := val / countTotal
 		lines := s.Location[0].Line
 		l := len(lines)
+		if l == 0 {
+			continue
+		}
 		var fileLines []FileLine
 		if innermost {
 			fileLines = []FileLine{{

@@ -18,7 +18,7 @@ func main() {
 		panic(err)
 	}
 
-	p1, countIndex, total := prof.FileToSortedProfile(f)
+	p1, countIndex, total := prof.FileToSortedProfile(f, 1)
 
 	line2String := func(line *profile.Line) string {
 		return fmt.Sprintf("%s:%d", line.Function.Filename, line.Line)

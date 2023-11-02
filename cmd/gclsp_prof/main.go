@@ -154,7 +154,7 @@ information in LspDir to match missed optimizations against hotspots.
 	profiles := args[1:]
 
 	// pi, err := prof.FromTextOutput(profiles)
-	pi, err := prof.FromProtoBuf(profiles, true, false)
+	pi, err := prof.FromProtoBuf(profiles, true, false, int(verbose))
 
 	if len(pi) == 0 {
 		return

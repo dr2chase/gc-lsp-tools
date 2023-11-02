@@ -151,14 +151,14 @@ func ReadFile(r io.Reader, verbose int) (cd *CompilerDiagnostics, err error) {
 	if err != nil {
 		return
 	}
-	if verbose > 1 {
+	if verbose > 2 {
 		fmt.Fprintf(os.Stderr, "\t\tSource file %s\n", vh.File)
 	}
 	cd = &CompilerDiagnostics{Header: vh}
 	d := new(Diagnostic)
 	for err = dec.Decode(d); err == nil; err = dec.Decode(d) {
 		cd.Diagnostics = append(cd.Diagnostics, d)
-		if verbose > 2 {
+		if verbose > 3 {
 			fmt.Fprintf(os.Stderr, "\t\t\t%s:%d %s\n", vh.File, d.Range.Start.Line, d.Code)
 		}
 		d = new(Diagnostic)
@@ -189,7 +189,7 @@ func ReadPackage(dir string, verbose int) (cds []*CompilerDiagnostics, err error
 			}
 			defer f.Close()
 			var cd *CompilerDiagnostics
-			if verbose > 1 {
+			if verbose > 2 {
 				fmt.Fprintf(os.Stderr, "\tReading file %s\n", path)
 			}
 			cd, err = ReadFile(f, verbose)
@@ -220,14 +220,14 @@ func ReadAll(dir string, byFile map[string]*CompilerDiagnostics, verbose int) er
 			first = false
 			return err
 		}
-		if verbose > 0 {
+		if verbose > 1 {
 			fmt.Fprintf(os.Stderr, "Reading package directory %s\n", path)
 		}
 		cds, err := ReadPackage(path, verbose)
 		for _, cd := range cds {
 			if old, ok := byFile[cd.Header.File]; ok {
 				old.Diagnostics = append(old.Diagnostics, cd.Diagnostics...)
-				if verbose > 1 {
+				if verbose > 2 {
 					fmt.Fprintf(os.Stderr, "Appending %s from %s to data for %s\n", cd.Header.File, cd.Header.Package, old.Header.Package)
 				}
 			} else {

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"runtime/pprof"
 	"sort"
 	"strconv"
@@ -43,6 +44,7 @@ var before = int64(0)
 var after = int64(0)
 var explain = false
 var cpuprofile = ""
+var memprofile = ""
 var threshold = 1.0
 var filter = ""
 var filterRE *regexp.Regexp
@@ -88,16 +90,17 @@ func (c *count) IsCountFlag() bool {
 // Reads allocation information from lspdir and tries various methods of laying it out.
 func main() {
 
-	flag.Var(&verbose, "v", "Spews information about lsp files")
+	flag.Var(&verbose, "v", "Spews increasingly more information about processing.")
 	flag.BoolVar(&explain, "e", explain, "Also supply \"explanations\"")
 	// flag.Int64Var(&after, "a", after, "Include log entries this many lines after a profile hot spot")
 	// flag.Int64Var(&before, "b", before, "Include log entries this many lines before a profile hot spot")
 
-	flag.StringVar(&filter, "f", filter, "Reported tags should match filter")
-	flag.Float64Var(&threshold, "t", threshold, "Threshold percentage below which profile entries will be ignored")
-	flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
+	// flag.StringVar(&filter, "f", filter, "Reported tags should match filter")
+	flag.Float64Var(&threshold, "t", threshold, "Threshold percentage below which types will be ignored")
+	// flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
+	flag.StringVar(&memprofile, "memprofile", memprofile, "Record a mem profile in this file")
 	// flag.StringVar(&bench, "bench", bench, "Run 'bench' benchmarks in current directory and reports hotspot(s). Passes -bench=whatever to go test, as well as arguments past --")
 	// flag.StringVar(&keep, "keep", keep, "For -bench, keep the intermedia results in <-keep>.lspdir and <-keep>.prof")
 	// flag.StringVar(&packages, "packages", packages, "For -bench, get diagnostics for the listed packages (see 'go help packages')")
@@ -128,6 +131,16 @@ func main() {
 		}()
 	}
 
+	if memprofile != "" {
+		file, _ := os.Create(memprofile)
+		runtime.MemProfileRate = 1
+		defer func() {
+			runtime.GC()
+			pprof.Lookup("heap").WriteTo(file, 0)
+			file.Close()
+		}()
+	}
+
 	// Assemble abbreviations
 	ss := strings.Split(shortenEVs, ",")
 	for _, s := range ss {
@@ -154,7 +167,7 @@ func main() {
 	profiles := args[1:]
 
 	// pi, err := prof.FromTextOutput(profiles)
-	pi, err := prof.FromProtoBuf(profiles, true, true)
+	pi, err := prof.FromProtoBuf(profiles, true, true, int(verbose))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "FromProtoBuf error %v\n", err)
 	} else {
@@ -245,16 +258,18 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 		}
 	}
 
+	sampleTotal := 0.0
 	for _, p := range pi {
 		innermost := p.FileLine[len(p.FileLine)-1]
 		twSlice := innerToType[innermost]
+		sampleTotal += p.FlatTotal
 		if len(twSlice) == 0 {
 			fmt.Fprintf(os.Stderr, "Missing type for %2.0f-bytes allocated at %s:%d\n", p.FlatTotal, innermost.SourceFile, innermost.Line)
 			typeToAlloc["U"] += p.FlatTotal
 		} else {
 			for _, tw := range twSlice {
 				typeToAlloc[tw.t] += p.FlatTotal * tw.w
-				if p.FlatPercent >= threshold {
+				if p.FlatPercent >= threshold*tw.w {
 					if verbose > 0 {
 						fmt.Fprintf(os.Stderr, "%3.2f%%, %s:%d, %2.1f, %s\n", p.FlatPercent, p.FileLine[0].SourceFile, p.FileLine[0].Line, tw.w, tw.t)
 					}
@@ -273,7 +288,7 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 		return len(types[i]) < len(types[j])
 	})
 	fmt.Printf(
-		"type,alloc,plain_size,pI,pT,gp_size,gI,gT,gpMinus_size,sort_size,gpSort_size,sortFill_size,pSFI,pSFT,gpSortFill_size,gSFI,gSFT,plain_span,gp_span,sort_span,gpSort_span,sortFill_span,gpSortFill_span,cpSize,cI,cT,cpSortFillSize,cSFI,cSFI\n")
+		"type,alloc,percent,plain_size,pI,pT,gp_size,gI,gT,gpMinus_size,sort_size,gpSort_size,sortFill_size,pSFI,pSFT,gpSortFill_size,gSFI,gSFT,plain_span,gp_span,sort_span,gpSort_span,sortFill_span,gpSortFill_span,cpSize,cI,cT,cpSortFillSize,cSFI,cSFI\n")
 
 	if verbose > 0 {
 		fmt.Fprintf(os.Stderr, "layouts\n")
@@ -287,6 +302,7 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 		}
 
 		plainBytes, plainSize, plainAlign, _, plainPtrSpan, _ := layouts.Builtins.Plain(t)
+
 		compressedBytes, compressedSize, compressedAlign, _, compressedPtrSpan, _ := layouts.Compressed.Plain(t)
 		gpBytes, gpSize, gpAlign, _, gpPtrSpan, _ := layouts.GpBuiltins.Plain(t)
 		_, gpMinusSize, _, _, _, _ := layouts.GpMinusBuiltins.Plain(t)
@@ -328,17 +344,19 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 			sfTotal += alloced * float64(sortFillSize) / float64(plainSize)
 			sfCompTotal += alloced * float64(compressedSortFillSize) / float64(plainSize)
 		}
-		//            alloc p   pi    pt   g   gi    gt   g- ss gss    sfpi  sfpt    sfgi  sfgt
-		fmt.Printf("%s,%1.0f, %d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f\n", t, alloced,
-			plainSize, pI, pT, gpSize, gI, gT, gpMinusSize, sortSize, gpSortSize, sortFillSize, sfpI, sfpT, gpSortFillSize, sfgI, sfgT,
-			plainPtrSpan, gpPtrSpan, sortPtrSpan, gpSortSpan, sortFillPtrSpan, gpSortFillSpan, compressedSize, cI, cT, compressedSortFillSize, sfcI, sfcT)
+		if alloced/sampleTotal >= threshold/100 {
+			//            alloc p   pi    pt   g   gi    gt   g- ss gss    sfpi  sfpt    sfgi  sfgt
+			fmt.Printf("%s,%1.0f, %1.2f%%, %d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f\n", t, alloced, 100*alloced/sampleTotal,
+				plainSize, pI, pT, gpSize, gI, gT, gpMinusSize, sortSize, gpSortSize, sortFillSize, sfpI, sfpT, gpSortFillSize, sfgI, sfgT,
+				plainPtrSpan, gpPtrSpan, sortPtrSpan, gpSortSpan, sortFillPtrSpan, gpSortFillSpan, compressedSize, cI, cT, compressedSortFillSize, sfcI, sfcT)
+		}
 	}
-	fmt.Println()
-	fmt.Printf("plain total, ratio, %1.0f,%1.3f\n", plainTotal, plainTotal/plainTotal)
-	fmt.Printf("sort+fill total, ratio, %1.0f,%1.3f\n", sfTotal, sfTotal/plainTotal)
-	fmt.Printf("sort+fill+compressed total, ratio, %1.0f,%1.3f\n", sfCompTotal, sfCompTotal/plainTotal)
-	fmt.Printf("gopherPen total, ratio, %1.0f,%1.3f\n", gpTotal, gpTotal/plainTotal)
-	fmt.Printf("gopherPen+sort+fill total, ratio, %1.0f,%1.3f\n", gpsfTotal, gpsfTotal/plainTotal)
+
+	fmt.Fprintf(os.Stderr, "plain total, ratio, %1.0f,%1.3f\n", plainTotal, plainTotal/plainTotal)
+	fmt.Fprintf(os.Stderr, "sort+fill total, ratio, %1.0f,%1.3f\n", sfTotal, sfTotal/plainTotal)
+	fmt.Fprintf(os.Stderr, "sort+fill+compressed total, ratio, %1.0f,%1.3f\n", sfCompTotal, sfCompTotal/plainTotal)
+	fmt.Fprintf(os.Stderr, "gopherPen total, ratio, %1.0f,%1.3f\n", gpTotal, gpTotal/plainTotal)
+	fmt.Fprintf(os.Stderr, "gopherPen+sort+fill total, ratio, %1.0f,%1.3f\n", gpsfTotal, gpsfTotal/plainTotal)
 }
 
 type taggedDiagnostic struct {
