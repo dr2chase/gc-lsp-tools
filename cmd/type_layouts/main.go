@@ -178,9 +178,6 @@ func main() {
 			fmt.Fprintf(os.Stderr, "FromProtoBuf returns pi, len=%d\n", len(pi))
 		}
 	}
-	// if len(pi) == 0 {
-	// 	return
-	// }
 
 	byFile := make(map[string]*lsp.CompilerDiagnostics)
 	err = lsp.ReadAll(lspDir, byFile, int(verbose))
@@ -284,7 +281,7 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 	}
 
 	if verbose > 0 {
-		fmt.Fprintf(os.Stderr, "sort\n")
+		fmt.Fprintf(os.Stderr, "sort, len(types)=%d\n", len(types))
 	}
 	sort.SliceStable(types, func(i, j int) bool {
 		if len(types[i]) == len(types[j]) {
