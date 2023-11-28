@@ -166,12 +166,17 @@ func main() {
 	lspDir := args[0]
 	profiles := args[1:]
 
-	// pi, err := prof.FromTextOutput(profiles)
-	pi, err := prof.FromProtoBuf(profiles, true, true, int(verbose))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "FromProtoBuf error %v\n", err)
-	} else {
-		fmt.Fprintf(os.Stderr, "FromProtoBuf returns pi, len=%d\n", len(pi))
+	var pi []*prof.ProfileItem
+	var err error
+
+	if len(profiles) > 0 {
+		// pi, err := prof.FromTextOutput(profiles)
+		pi, err = prof.FromProtoBuf(profiles, true, true, int(verbose))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "FromProtoBuf error %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "FromProtoBuf returns pi, len=%d\n", len(pi))
+		}
 	}
 	// if len(pi) == 0 {
 	// 	return
@@ -344,7 +349,7 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 			sfTotal += alloced * float64(sortFillSize) / float64(plainSize)
 			sfCompTotal += alloced * float64(compressedSortFillSize) / float64(plainSize)
 		}
-		if alloced/sampleTotal >= threshold/100 {
+		if alloced/sampleTotal >= threshold/100 || len(pi) == 0 {
 			//            alloc p   pi    pt   g   gi    gt   g- ss gss    sfpi  sfpt    sfgi  sfgt
 			fmt.Printf("%s,%1.0f, %1.2f%%, %d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f\n", t, alloced, 100*alloced/sampleTotal,
 				plainSize, pI, pT, gpSize, gI, gT, gpMinusSize, sortSize, gpSortSize, sortFillSize, sfpI, sfpT, gpSortFillSize, sfgI, sfgT,
@@ -352,11 +357,14 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "plain total, ratio, %1.0f,%1.3f\n", plainTotal, plainTotal/plainTotal)
-	fmt.Fprintf(os.Stderr, "sort+fill total, ratio, %1.0f,%1.3f\n", sfTotal, sfTotal/plainTotal)
-	fmt.Fprintf(os.Stderr, "sort+fill+compressed total, ratio, %1.0f,%1.3f\n", sfCompTotal, sfCompTotal/plainTotal)
-	fmt.Fprintf(os.Stderr, "gopherPen total, ratio, %1.0f,%1.3f\n", gpTotal, gpTotal/plainTotal)
-	fmt.Fprintf(os.Stderr, "gopherPen+sort+fill total, ratio, %1.0f,%1.3f\n", gpsfTotal, gpsfTotal/plainTotal)
+	if len(pi) > 0 {
+
+		fmt.Fprintf(os.Stderr, "plain total, ratio, %1.0f,%1.3f\n", plainTotal, plainTotal/plainTotal)
+		fmt.Fprintf(os.Stderr, "sort+fill total, ratio, %1.0f,%1.3f\n", sfTotal, sfTotal/plainTotal)
+		fmt.Fprintf(os.Stderr, "sort+fill+compressed total, ratio, %1.0f,%1.3f\n", sfCompTotal, sfCompTotal/plainTotal)
+		fmt.Fprintf(os.Stderr, "gopherPen total, ratio, %1.0f,%1.3f\n", gpTotal, gpTotal/plainTotal)
+		fmt.Fprintf(os.Stderr, "gopherPen+sort+fill total, ratio, %1.0f,%1.3f\n", gpsfTotal, gpsfTotal/plainTotal)
+	}
 }
 
 type taggedDiagnostic struct {
