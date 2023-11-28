@@ -224,6 +224,7 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 		fmt.Fprintf(os.Stderr, "reportPlain\n")
 	}
 	innerToType := make(map[prof.FileLine][]typeAndWeight)
+	typeToInners := make(map[string][]prof.FileLine)
 	typeToAlloc := make(map[string]float64)
 	seen := make(map[fileLineCode]void)
 
@@ -239,10 +240,10 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 				fl := innermostFileLine(filename, int64(x.Range.Start.Line), x.RelatedInformation)
 				if _, ok := seen[fileLineCode{fl, x.Code}]; ok {
 					continue
-				} else {
-					seen[fileLineCode{fl, x.Code}] = unit
 				}
+				seen[fileLineCode{fl, x.Code}] = unit
 				innerToType[fl] = append(innerToType[fl], typeAndWeight{ty, weight})
+				typeToInners[ty] = append(typeToInners[ty], fl)
 				if _, ok := typeSet[x.Message]; !ok { // list of all types.
 					typeSet[ty] = unit
 					types = append(types, ty)
@@ -290,7 +291,7 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 		return len(types[i]) < len(types[j])
 	})
 	fmt.Printf(
-		"type,alloc,percent,plain_size,pI,pT,gp_size,gI,gT,gpMinus_size,sort_size,gpSort_size,sortFill_size,pSFI,pSFT,gpSortFill_size,gSFI,gSFT,plain_span,gp_span,sort_span,gpSort_span,sortFill_span,gpSortFill_span,cpSize,cI,cT,cpSortFillSize,cSFI,cSFI\n")
+		"type,alloc,percent,file,line,plain_size,pI,pT,gp_size,gI,gT,gpMinus_size,sort_size,gpSort_size,sortFill_size,pSFI,pSFT,gpSortFill_size,gSFI,gSFT,plain_span,gp_span,sort_span,gpSort_span,sortFill_span,gpSortFill_span,cpSize,cI,cT,cpSortFillSize,cSFI,cSFI\n")
 
 	if verbose > 0 {
 		fmt.Fprintf(os.Stderr, "layouts\n")
@@ -347,8 +348,10 @@ func reportPlain(byFile map[string]*lsp.CompilerDiagnostics, pi []*prof.ProfileI
 			sfCompTotal += alloced * float64(compressedSortFillSize) / float64(plainSize)
 		}
 		if alloced/sampleTotal >= threshold/100 || len(pi) == 0 {
+			fl := typeToInners[t][0]
+			file, line := fl.SourceFile, fl.Line
 			//            alloc p   pi    pt   g   gi    gt   g- ss gss    sfpi  sfpt    sfgi  sfgt
-			fmt.Printf("%s,%1.0f, %1.2f%%, %d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f\n", t, alloced, 100*alloced/sampleTotal,
+			fmt.Printf("%s,%1.0f, %1.2f%%, %s,%d, %d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f,%d,%d,%d,%d,%d,%d,%d,%1.2f,%1.2f,%d,%1.2f,%1.2f\n", t, alloced, 100*alloced/sampleTotal, file, line,
 				plainSize, pI, pT, gpSize, gI, gT, gpMinusSize, sortSize, gpSortSize, sortFillSize, sfpI, sfpT, gpSortFillSize, sfgI, sfgT,
 				plainPtrSpan, gpPtrSpan, sortPtrSpan, gpSortSpan, sortFillPtrSpan, gpSortFillSpan, compressedSize, cI, cT, compressedSortFillSize, sfcI, sfcT)
 		}
