@@ -1,0 +1,7 @@
+Untested: cmd/diffcov/main.go	   21 + 	flag.Var(&verbose, "v", "Says more")
+Untested: cmd/diffcov/main.go	   36 + 	if len(flag.Args()) != 1 {
+Untested: cmd/diffcov/main.go	   37 + 		flag.Usage()
+Untested: cmd/diffcov/main.go	   38 + 		os.Exit(1)
+Untested: diffcov/diffcov.go	   81 + 						status = "        "
+Untested: diffcov/diffcov.go	  111 + 		if strings.HasPrefix(l, "mode: ") {
+Untested: diffcov/diffcov.go	  113 + 		}

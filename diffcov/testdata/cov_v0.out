@@ -1,0 +1,3 @@
+Untested: diffcov/diffcov.go	   81 + 						status = "        "
+Untested: diffcov/diffcov.go	  111 + 		if strings.HasPrefix(l, "mode: ") {
+Untested: diffcov/diffcov.go	  113 + 		}

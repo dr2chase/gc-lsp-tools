@@ -14,11 +14,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/pprof"
-	"strconv"
 	"strings"
 
 	"github.com/dr2chase/gc-lsp-tools/lsp"
 	"github.com/dr2chase/gc-lsp-tools/prof"
+	"github.com/dr2chase/gc-lsp-tools/reuse"
 	// "github.com/rdleal/intervalst/interval"
 )
 
@@ -36,7 +36,7 @@ var bench string
 var keep string
 var packages string
 
-var verbose count
+var verbose reuse.Count
 var before = int64(0)
 var after = int64(0)
 var explain = false
@@ -44,43 +44,6 @@ var cpuprofile = ""
 var threshold = 1.0
 var filter = ""
 var filterRE *regexp.Regexp
-
-// count is a flag.Value that is like a flag.Bool and a flag.Int.
-// If used as -name, it increments the count, but -name=x sets the count.
-// Used for verbose flag -v.
-type count int
-
-func (c *count) String() string {
-	return fmt.Sprint(int(*c))
-}
-
-func (c *count) Set(s string) error {
-	switch s {
-	case "true":
-		*c++
-	case "false":
-		*c = 0
-	default:
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			return fmt.Errorf("invalid count %q", s)
-		}
-		*c = count(n)
-	}
-	return nil
-}
-
-func (c *count) Get() interface{} {
-	return int(*c)
-}
-
-func (c *count) IsBoolFlag() bool {
-	return true
-}
-
-func (c *count) IsCountFlag() bool {
-	return true
-}
 
 // gclsp_prof [-v] [-e] [-a=n] [-b=n] [-f=RE] [-t=f.f] [-s=EVs] [-cpuprofile=file]  lspdir profile1 [ profile2 ... ]
 // Produces a summary of optimizations (if any) that were not or could not be applied at hotspots in the profile.

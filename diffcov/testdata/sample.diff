@@ -1,0 +1,47 @@
+diff --git a/cmd/diffcov/main.go b/cmd/diffcov/main.go
+index 09691ea..bf8ceb7 100644
+--- a/cmd/diffcov/main.go
++++ b/cmd/diffcov/main.go
+@@ -18,7 +18,7 @@ func main() {
+ 	var coverprofile string
+ 	var diffDir string
+ 
+-	flag.Var(&verbose, "v", "Spews information about profiles read and lsp files")
++	flag.Var(&verbose, "v", "Says more")
+ 	flag.StringVar(&coverprofile, "c", coverprofile, "name of test -coverprofile output file")
+ 	flag.StringVar(&diffDir, "d", diffDir, "diff directory root (typically git repo root)")
+ 
+@@ -33,6 +33,10 @@ If there is no coverprofile, it reports all the new statements.
+ 
+ 	flag.Parse()
+ 
++	if len(flag.Args()) != 1 {
++		flag.Usage()
++		os.Exit(1)
++	}
+ 	diffs := flag.Args()[0]
+ 
+ 	diffcov.DoDiffs(diffs, coverprofile, diffDir, verbose)
+diff --git a/diffcov/diffcov.go b/diffcov/diffcov.go
+index 2f12925..b76e153 100644
+--- a/diffcov/diffcov.go
++++ b/diffcov/diffcov.go
+@@ -78,7 +78,7 @@ func DoDiffs(diffs string, coverprofile string, diffDir string, verbose reuse.Co
+ 						continue
+ 					}
+ 					if cl.bLine <= l.Number && l.Number <= cl.eLine {
+-						status = "         "
++						status = "        "
+ 						break
+ 					}
+ 
+@@ -108,6 +108,9 @@ func readCoverProfile(fName string) map[string][]coverLine {
+ 		if len(l) == 0 {
+ 			continue
+ 		}
++		if strings.HasPrefix(l, "mode: ") {
++			continue
++		}
+ 		parts := coverRE.FindStringSubmatch(l)
+ 		if len(parts) != 8 {
+ 			fmt.Fprintf(os.Stderr, "Line %d failed to match cover line RE, line = '%s'\n", i, l)

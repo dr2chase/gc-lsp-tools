@@ -4,5 +4,5 @@ go 1.21
 
 require (
 	github.com/google/pprof v0.0.0-20230510103437-eeec1cb781c3
-	github.com/rdleal/intervalst v0.0.0-20221028215511-a098aa0d2cb8
+	github.com/waigani/diffparser v0.0.0-20190828052634-7391f219313d
 )
