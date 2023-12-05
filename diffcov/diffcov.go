@@ -9,7 +9,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,25 +38,97 @@ type coverLine struct {
 	coverCount int
 }
 
-func DoDiffs(diffs string, coverprofile string, diffDir string, verbose reuse.Count) {
-	byt, err := ioutil.ReadFile(diffs)
+func DoDiffs(diffs string, coverprofile string, diffDir, modDir string, strip int, verbose reuse.Count) {
+	byt, err := os.ReadFile(diffs)
 	must(err)
 	diff, err := diffparser.Parse(string(byt))
 	must(err)
 	var coverage map[string][]coverLine
+	var gomodpkg string
+
 	if coverprofile != "" {
 		coverage = readCoverProfile(coverprofile)
+
+		// The file names in the coverprofile use the package in go.mod
+		gomod := filepath.Join(modDir, "go.mod")
+		buf, err := os.ReadFile(gomod)
+		if modDir != "" {
+			must(err)
+		} else {
+			modDepth := 0
+			// Try to automate go.mod location
+			for err != nil && modDepth < 20 {
+				modDepth++
+				modDir = filepath.Join("..", modDir)
+				gomod = filepath.Join(modDir, "go.mod")
+				buf, err = os.ReadFile(gomod)
+			}
+			if verbose > 1 {
+				fmt.Fprintf(os.Stderr, "Automated go.mod location returns modDir=%s, modDepth=%d, err=%v\n", modDir, modDepth, err)
+			}
+			must(err)
+		}
+
+		lines := strings.Split(string(buf), "\n")
+
+		for _, s := range lines {
+			s = strings.TrimSpace(s)
+			if strings.HasPrefix(s, "module ") {
+				gomodpkg = strings.TrimSpace(s[len("module"):])
+				break
+			}
+		}
+
 	}
+
 	for _, f := range diff.Files {
 		fn := f.NewName
+
 		if diffDir != "" {
 			fn = filepath.Join(diffDir, fn)
+		} else {
+			// try to find it.
+			diffDir = modDir
+			computedStrip := 0
+			for computedStrip < 20 {
+				tfn := filepath.Join(diffDir, fn)
+				_, err = os.Stat(tfn)
+				if err == nil {
+					fn = tfn
+					if strip == 0 {
+						strip = computedStrip
+					}
+					if verbose > 1 {
+						fmt.Fprintf(os.Stderr, "Automated diffDir location returns diffDir=%s, computedStrip=%d, strip=%d\n",
+							diffDir, computedStrip, strip)
+					}
+					break
+				}
+				diffDir = filepath.Join(diffDir, "..")
+				computedStrip++
+			}
+			must(err)
 		}
+
 		lines := ReadFile(fn)
+
+		pfn := f.NewName
+		for i := 0; i < strip; i++ {
+			slash := strings.IndexByte(pfn, byte(os.PathSeparator))
+			if slash == -1 {
+				break
+			}
+			pfn = pfn[slash+1:]
+		}
+
 		var covered []coverLine
 		if coverage != nil {
+
 			for k, v := range coverage {
-				if strings.HasSuffix(k, f.NewName) {
+				if verbose > 2 {
+					fmt.Fprintf(os.Stderr, "Trying to match %s against %s, gomodpkg=%s\n", pfn, k, gomodpkg)
+				}
+				if strings.HasSuffix(k, filepath.Join(gomodpkg, pfn)) {
 					covered = v
 					break
 				}
@@ -101,7 +172,7 @@ func readCoverProfile(fName string) map[string][]coverLine {
 
 	coverLines := make(map[string][]coverLine)
 
-	buf, err := ioutil.ReadFile(fName)
+	buf, err := os.ReadFile(fName)
 	must(err)
 	lines := strings.Split(string(buf), "\n")
 	// github.com/dr2chase/gc-lsp-tools/layouts/layouts.go:590.21,592.6 1 1

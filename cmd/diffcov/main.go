@@ -17,17 +17,22 @@ func main() {
 	var verbose reuse.Count
 	var coverprofile string
 	var diffDir string
+	var modDir string
+	var strip int
 
-	flag.Var(&verbose, "v", "Says more")
+	flag.Var(&verbose, "v", "Says more and more")
 	flag.StringVar(&coverprofile, "c", coverprofile, "name of test -coverprofile output file")
-	flag.StringVar(&diffDir, "d", diffDir, "diff directory root (typically git repo root)")
+	flag.StringVar(&diffDir, "d", diffDir, "diff directory root (typically parent of git repo root)")
+	flag.StringVar(&modDir, "m", modDir, "directory containing go.mod")
+	flag.IntVar(&strip, "s", strip, "leading directories to strip from files in diff (useful w/ packages differently named from directory)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, `
-'%s diffFile' reports the new statements in diffFile that do not appear in the coverprofile.
+'%s [options] diffFile' reports the new statements in diffFile that do not appear in the coverprofile.
 If there is no coverprofile, it reports all the new statements.
+If -m, -d, -s are not provided, it searches in parent directories.
 `, os.Args[0])
 	}
 
@@ -39,5 +44,5 @@ If there is no coverprofile, it reports all the new statements.
 	}
 	diffs := flag.Args()[0]
 
-	diffcov.DoDiffs(diffs, coverprofile, diffDir, verbose)
+	diffcov.DoDiffs(diffs, coverprofile, diffDir, modDir, strip, verbose)
 }
