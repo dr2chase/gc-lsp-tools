@@ -38,10 +38,8 @@ type coverLine struct {
 	coverCount int
 }
 
-func DoDiffs(diffs string, coverprofile string, diffDir, modDir string, strip int, verbose reuse.Count) {
-	byt, err := os.ReadFile(diffs)
-	must(err)
-	diff, err := diffparser.Parse(string(byt))
+func DoDiffs(diffBytes []byte, coverprofile string, diffDir, modDir string, strip int, verbose reuse.Count, showTested bool) {
+	diff, err := diffparser.Parse(string(diffBytes))
 	must(err)
 	var coverage map[string][]coverLine
 	var gomodpkg string
@@ -156,7 +154,7 @@ func DoDiffs(diffs string, coverprofile string, diffDir, modDir string, strip in
 				}
 				if verbose > 1 {
 					fmt.Printf("%s: %s\t%5d %s %T %s\n", status, f.NewName, l.Number, mode, lines[l.Number], l.Content)
-				} else if status == "Untested" || verbose > 0 {
+				} else if status == "Untested" || showTested {
 					fmt.Printf("%s: %s\t%5d %s %s\n", status, f.NewName, l.Number, mode, l.Content)
 				}
 			}
