@@ -123,7 +123,7 @@ func DoDiffs(diffBytes []byte, coverprofile string, diffDir, modDir string, stri
 		if coverage != nil {
 
 			for k, v := range coverage {
-				if verbose > 2 {
+				if verbose > 3 {
 					fmt.Fprintf(os.Stderr, "Trying to match %s against %s, gomodpkg=%s\n", pfn, k, gomodpkg)
 				}
 				if strings.HasSuffix(k, filepath.Join(gomodpkg, pfn)) {
@@ -152,7 +152,7 @@ func DoDiffs(diffBytes []byte, coverprofile string, diffDir, modDir string, stri
 					}
 
 				}
-				if verbose > 1 {
+				if verbose > 2 {
 					fmt.Printf("%s: %s\t%5d %s %T %s\n", status, f.NewName, l.Number, mode, lines[l.Number], l.Content)
 				} else if status == "Untested" || showTested {
 					fmt.Printf("%s: %s\t%5d %s %s\n", status, f.NewName, l.Number, mode, l.Content)

@@ -12,6 +12,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "%s whatever.prof reads a pprof protobuf file and prints the contents\n", os.Args[0])
+		os.Exit(1)
+	}
 	fname := os.Args[1]
 	f, err := os.Open(fname)
 	if err != nil {

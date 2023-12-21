@@ -15,6 +15,13 @@ import (
 	"github.com/dr2chase/gc-lsp-tools/reuse"
 )
 
+func fail(format string, args ...any) {
+	flag.Usage()
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, format, args...)
+	os.Exit(1)
+}
+
 // diffcov whatever.diff
 func main() {
 	var verbose reuse.Count
@@ -64,20 +71,14 @@ If -M, -D, -S are not provided, %[1]s searches in parent directories for clues.
 		}
 		diffBytes, err = gitCmd.CombinedOutput()
 		if err != nil {
-			flag.Usage()
-			fmt.Fprintf(os.Stderr, "\n%s\nfailed to run git diff, err=%v, output was\nn", string(diffBytes), err)
-			os.Exit(1)
+			fail("%s\nfailed to run git diff, err=%v, output was\n", string(diffBytes), err)
 		}
 		if len(diffBytes) == 0 {
-			flag.Usage()
-			fmt.Fprintf(os.Stderr, "\ngit diff return empty output, perhaps there is a problem with the directory or the flags?\n")
-			os.Exit(1)
+			fail("git diff return empty output, perhaps there is a problem with the directory or the flags?\n")
 		}
 		coverDir, err := os.MkdirTemp("", "diffcov")
 		if err != nil {
-			flag.Usage()
-			fmt.Fprintf(os.Stderr, "\nfailed to create temporary dir, err=%v\n", err)
-			os.Exit(1)
+			fail("failed to create temporary dir, err=%v\n", err)
 		}
 
 		coverprofile = filepath.Join(coverDir, "coverprofile.out")
@@ -89,9 +90,7 @@ If -M, -D, -S are not provided, %[1]s searches in parent directories for clues.
 		}
 		coverOut, err := testCmd.CombinedOutput()
 		if err != nil {
-			flag.Usage()
-			fmt.Fprintf(os.Stderr, "\n%s\nfailed to run go test ..., err=%v\n", string(coverOut), err)
-			os.Exit(1)
+			fail("%s\nfailed to run go test ..., err=%v\n", string(coverOut), err)
 		}
 		if verbose > 0 {
 			fmt.Fprintf(os.Stderr, "%s\n", string(coverOut))
@@ -100,9 +99,7 @@ If -M, -D, -S are not provided, %[1]s searches in parent directories for clues.
 		diffFile = flag.Args()[0]
 		diffBytes, err = os.ReadFile(diffFile)
 		if err != nil {
-			flag.Usage()
-			fmt.Fprintf(os.Stderr, "\ncould not read diff from %s, error was %v\n", diffFile, err)
-			os.Exit(1)
+			fail("could not read diff from %s, error was %v\n", diffFile, err)
 		}
 	}
 
