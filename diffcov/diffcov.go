@@ -38,6 +38,12 @@ type coverLine struct {
 	coverCount int
 }
 
+// type T struct{ A, B int }
+
+// func F(a, b int) *T {
+// 	return (*T)(reuse.F(a, b))
+// }
+
 func DoDiffs(diffBytes []byte, coverprofile string, diffDir, modDir string, strip int, verbose reuse.Count, showTested bool) {
 	diff, err := diffparser.Parse(string(diffBytes))
 	must(err)
@@ -200,7 +206,7 @@ func readCoverProfile(fName string) map[string][]coverLine {
 
 }
 
-// ReadFile parse fileName and returns a map of lines to statements.
+// ReadFile parses fileName and returns a map of lines to statements.
 func ReadFile(fileName string) (lines map[int]ast.Stmt) {
 	lines = make(map[int]ast.Stmt)
 	if !strings.HasSuffix(fileName, ".go") {

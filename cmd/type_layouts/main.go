@@ -7,11 +7,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -22,7 +19,6 @@ import (
 	"github.com/dr2chase/gc-lsp-tools/layouts"
 	"github.com/dr2chase/gc-lsp-tools/lsp"
 	"github.com/dr2chase/gc-lsp-tools/prof"
-	// "github.com/rdleal/intervalst/interval"
 )
 
 var pwd string = os.Getenv("PWD")
@@ -32,7 +28,7 @@ var home string = os.Getenv("HOME")
 
 type abbreviation struct{ substring, replace string }
 
-var shortenEVs string = "" // "PWD,GOROOT,GOPATH,HOME"
+var shortenEVs string = "PWD,GOROOT,GOPATH,HOME"
 var abbreviations []abbreviation
 
 var bench string
@@ -40,8 +36,6 @@ var keep string
 var packages string
 
 var verbose count
-var before = int64(0)
-var after = int64(0)
 var explain = false
 var cpuprofile = ""
 var memprofile = ""
@@ -86,31 +80,24 @@ func (c *count) IsCountFlag() bool {
 	return true
 }
 
-// gclsp_prof [-v] [-e] [-a=n] [-b=n] [-f=RE] [-t=f.f] [-s=EVs] [-cpuprofile=file]  lspdir // profile1 [ profile2 ... ]
 // Reads allocation information from lspdir and tries various methods of laying it out.
 func main() {
 
 	flag.Var(&verbose, "v", "Spews increasingly more information about processing.")
-	flag.BoolVar(&explain, "e", explain, "Also supply \"explanations\"")
-	// flag.Int64Var(&after, "a", after, "Include log entries this many lines after a profile hot spot")
-	// flag.Int64Var(&before, "b", before, "Include log entries this many lines before a profile hot spot")
 
-	// flag.StringVar(&filter, "f", filter, "Reported tags should match filter")
 	flag.Float64Var(&threshold, "t", threshold, "Threshold percentage below which types will be ignored")
-	// flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
+	flag.StringVar(&shortenEVs, "s", shortenEVs, "Environment variables used to abbreviate file names in output")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", cpuprofile, "Record a cpu profile in this file")
 	flag.StringVar(&memprofile, "memprofile", memprofile, "Record a mem profile in this file")
-	// flag.StringVar(&bench, "bench", bench, "Run 'bench' benchmarks in current directory and reports hotspot(s). Passes -bench=whatever to go test, as well as arguments past --")
-	// flag.StringVar(&keep, "keep", keep, "For -bench, keep the intermedia results in <-keep>.lspdir and <-keep>.prof")
-	// flag.StringVar(&packages, "packages", packages, "For -bench, get diagnostics for the listed packages (see 'go help packages')")
 
 	usage := func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr,
 			`
-%s LspDir reads the compiler logging information in LspDir to experiment with type layouts.
+%s LspDir [profiles] reads the compiler logging information in LspDir to experiment with type layouts.
+If profiles are present, they are used to weight the type-associated sizes by allocation frequency.
 `, os.Args[0])
 	}
 
@@ -152,12 +139,6 @@ func main() {
 	}
 
 	args := flag.Args()
-
-	if bench != "" {
-		var cleanup func()
-		args, cleanup = runBench(args)
-		defer cleanup()
-	}
 
 	if len(args) < 1 {
 		usage()
@@ -407,17 +388,18 @@ func fileLineFromRelated(ri *lsp.DiagnosticRelatedInformation) FileLineRange {
 }
 
 func innermostFileLine(outerFile string, outerLine int64, relatedInformation []lsp.DiagnosticRelatedInformation) prof.FileLine {
-	if strings.Contains(outerFile, "graph/graph.go") && outerLine == 373 {
-		fmt.Fprintf(os.Stderr, "MISSING LINE\n")
-		for _, ri := range relatedInformation {
-			if ri.Message != "inlineLoc" {
-				break
-			}
-			flr := fileLineFromRelated(&ri)
-			fmt.Fprintf(os.Stderr, "%s:%d\n", flr.SourceFile, flr.LineStart)
-		}
-	}
+	// if strings.Contains(outerFile, "graph/graph.go") && outerLine == 373 {
+	// 	fmt.Fprintf(os.Stderr, "MISSING LINE\n")
+	// 	for _, ri := range relatedInformation {
+	// 		if ri.Message != "inlineLoc" {
+	// 			break
+	// 		}
+	// 		flr := fileLineFromRelated(&ri)
+	// 		fmt.Fprintf(os.Stderr, "%s:%d\n", flr.SourceFile, flr.LineStart)
+	// 	}
+	// }
 
+	outerFile = shorten(outerFile)
 	for _, ri := range relatedInformation {
 		if ri.Message != "inlineLoc" {
 			break
@@ -425,99 +407,18 @@ func innermostFileLine(outerFile string, outerLine int64, relatedInformation []l
 		flr := fileLineFromRelated(&ri)
 		outerFile, outerLine = flr.SourceFile, flr.LineStart
 
-		if strings.Contains(outerFile, "graph/graph.go") && outerLine == 373 {
-			fmt.Fprintf(os.Stderr, "MISSING LINE\n")
-			for _, ri := range relatedInformation {
-				if ri.Message != "inlineLoc" {
-					break
-				}
-				flr := fileLineFromRelated(&ri)
-				fmt.Fprintf(os.Stderr, "%s:%d\n", flr.SourceFile, flr.LineStart)
-			}
-		}
+		// if strings.Contains(outerFile, "graph/graph.go") && outerLine == 373 {
+		// 	fmt.Fprintf(os.Stderr, "MISSING LINE\n")
+		// 	for _, ri := range relatedInformation {
+		// 		if ri.Message != "inlineLoc" {
+		// 			break
+		// 		}
+		// 		flr := fileLineFromRelated(&ri)
+		// 		fmt.Fprintf(os.Stderr, "%s:%d\n", flr.SourceFile, flr.LineStart)
+		// 	}
+		// }
 	}
 	return prof.FileLine{SourceFile: outerFile, Line: outerLine}
-}
-
-// runBench runs a benchmark bench (see global) found in the currrent directory,
-// with appropriate flags to collect both LSP-encoded compiler diagnostics and
-// a cpuprofile.  The returned string contains the names of the diagnostics directory
-// and cpuprofile file, and a cleanup function to remove any temporary directories
-// created here.
-func runBench(testargs []string) (newargs []string, cleanup func()) {
-	testdir, err := os.Getwd()
-	cleanup = func() {}
-	if keep == "" {
-		testdir, err = ioutil.TempDir("", "GcLspProfBench")
-		if err != nil {
-			panic(err)
-		}
-		cleanup = func() { os.RemoveAll(testdir) }
-		abbreviations = append(abbreviations, abbreviation{substring: testdir, replace: "$TEMPDIR"})
-		keep = "gclsp-bench"
-	}
-	// go test -gcflags=all=-json=0,testdir/gclsp -cpuprofile=testdir/test.prof -bench=Bench .
-	lsp := filepath.Join(testdir, keep+".lspdir")
-	cpuprofile := filepath.Join(testdir, keep+".prof")
-
-	if packages != "" {
-		packages = packages + "="
-	}
-	gcFlags := "-gcflags=" + packages + "-json=0," + lsp
-
-	cmdArgs := []string{"test", gcFlags, "-cpuprofile=" + cpuprofile, "-bench=" + bench, "."}
-	cmdArgs = append(cmdArgs, testargs...)
-	cmd := exec.Command("go", cmdArgs...)
-	out := runCmd(cmd)
-	fmt.Printf("%s\n", string(out))
-	newargs = []string{lsp, cpuprofile}
-	return
-}
-
-// runCmd wraps running a command with an error check,
-// failing the test if there is an error.  The combined
-// output is returned.
-func runCmd(cmd *exec.Cmd) []byte {
-	line := "("
-	wd := pwd
-	if cmd.Dir != "" && cmd.Dir != "." && cmd.Dir != pwd {
-		wd = cmd.Dir
-		line += " cd " + trimCwd(cmd.Dir, pwd, false) + " ; "
-	}
-	// line += trim(cmd.Path, wd)
-	for i, s := range cmd.Args {
-		line += " " + trimCwd(s, wd, i == 0)
-	}
-	line += " )"
-	fmt.Printf("%s\n", line)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n\n%v", string(out), err)
-		os.Exit(1)
-	}
-	return out
-}
-
-// trim shortens s to be relative to cwd, if possible, and also
-// replaces embedded instances of certain environment variables.
-// needsDotSlash indicates that s is something like a command
-// and must contain at least one path separator (because "." is
-// by sensible default not on paths).
-func trimCwd(s, cwd string, needsDotSlash bool) string {
-	if s == cwd {
-		return "."
-	}
-	if strings.HasPrefix(s, cwd+"/") {
-		s = s[1+len(cwd):]
-	} else if strings.HasPrefix(s, cwd+string(filepath.Separator)) {
-		s = s[len(cwd+string(filepath.Separator)):]
-	} else {
-		return shorten(s)
-	}
-	if needsDotSlash {
-		s = "." + string(filepath.Separator) + s
-	}
-	return s
 }
 
 // shorten replaces instances of $EV in a string.

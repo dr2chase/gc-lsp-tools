@@ -26,6 +26,14 @@ type ProfileItem struct {
 	FileLine    []FileLine
 }
 
+type ValueType struct {
+	Type string // cpu, wall, inuse_space, etc
+	Unit string // seconds, nanoseconds, bytes, etc
+
+	typeX int64
+	unitX int64
+}
+
 // FileToSortedProfile reads a file containing possibly compressed
 // protobuf form of pprof data, and returns the profile.Profile
 // contained with, plus the Sample[*].Value index of the sample

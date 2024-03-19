@@ -47,6 +47,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, `
+Running '%[1]s' with no options tends to work, so try that first and ignore the rest of this documentation.
+'%[1]s' uses diff and test coverage data to point out any new or modified code in the diff that is not exercised by tests.
+
 '%[1]s [options] -c coverprofile [-d] diffFile' reports the new statements in diffFile that do not appear in the coverprofile.
 '%[1]s [options] [-d] diffFile' reports all the new statements in diffFile.
 '%[1]s [no options]' will attempt to run 'git diff' and 'go test -coverprofile' to automatically generate -c/-d files.
